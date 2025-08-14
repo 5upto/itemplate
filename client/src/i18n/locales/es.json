@@ -1,0 +1,46 @@
+{
+  "nav": {
+    "home": "Inicio",
+    "inventories": "Inventarios",
+    "profile": "Perfil",
+    "admin": "Admin",
+    "login": "Iniciar sesión",
+    "logout": "Cerrar sesión",
+    "toggleTheme": "Cambiar tema",
+    "theme": "Tema",
+    "language": "Idioma"
+  },
+  "inventory": {
+    "title": "Gestión de Inventario",
+    "selectedItems": "{{count}} elementos seleccionados",
+    "customId": "ID",
+    "items": "Elementos",
+    "tabs": {
+      "items": "Elementos",
+      "discussion": "Discusión",
+      "settings": "Ajustes",
+      "customIds": "Formato de ID",
+      "access": "Acceso",
+      "fields": "Campos",
+      "stats": "Estadísticas"
+    }
+  },
+  "fields": {
+    "title": "Título del campo"
+  },
+  "common": {
+    "createdBy": "Creado por",
+    "createdAt": "Creado el",
+    "actions": "Acciones",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "previous": "Anterior",
+    "next": "Siguiente",
+    "select": "Seleccionar"
+  },
+  "search": {
+    "noResults": "No se encontraron resultados"
+  }
+}
