@@ -10,33 +10,40 @@ import { Calendar, Package, Tag as TagIcon, User as UserIcon, Hash as HashIcon, 
 export default function ItemDetailPage() {
   const { id } = useParams();
   const { t } = useTranslation();
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, loading: authLoading } = useAuth();
   const qc = useQueryClient();
   const [likeSubmitting, setLikeSubmitting] = useState(false);
   const [liked, setLiked] = useState(false);
   const [count, setCount] = useState(0);
 
   const { data, isLoading, isError, error } = useQuery(
-    ['item:detail', id],
+    ['item:detail', id, user?.id || null],
     async () => {
       const res = await axios.get(`/api/items/${id}`);
       const d = res.data;
       return d?.item || d; // support both shapes
     },
-    { enabled: !!id }
+    { enabled: !!id && authLoading === false }
   );
 
   const item = data || {};
-  const serverLikeCount = typeof item.likeCount === 'number' ? item.likeCount : item.likes?.length || 0;
+  const serverLikeCount = (() => {
+    if (typeof item.likeCount === 'number') return item.likeCount;
+    if (Array.isArray(item.likeUsers)) return item.likeUsers.length;
+    if (Array.isArray(item.likes)) return item.likes.length;
+    return 0;
+  })();
   const serverIsLiked = (() => {
+    if (typeof item.isLikedByUser === 'boolean') return item.isLikedByUser;
     if (typeof item.liked === 'boolean') return item.liked;
-    if (!Array.isArray(item.likes) || !user) return undefined;
-    const uid = user.id || user._id;
-    const inArray = item.likes.some((l) => {
-      if (typeof l === 'string') return l === uid;
-      if (l && typeof l === 'object') return l.id === uid || l._id === uid;
+    if (!user) return undefined;
+    const uid = String(user.id || user._id);
+    const arrays = [item.likeUsers, item.likes].filter(Array.isArray);
+    const inArray = arrays.some(arr => arr.some((l) => {
+      if (typeof l === 'string' || typeof l === 'number') return String(l) === uid;
+      if (l && typeof l === 'object') return String(l.id ?? l._id ?? '') === uid;
       return false;
-    });
+    }));
     return inArray;
   })();
 
@@ -44,11 +51,15 @@ export default function ItemDetailPage() {
   useEffect(() => {
     setCount(serverLikeCount || 0);
     // Only overwrite local liked if server provides definitive info
-    const hasServerLikedInfo = typeof item.liked === 'boolean' || Array.isArray(item.likes);
+    const hasServerLikedInfo =
+      typeof item.isLikedByUser === 'boolean' ||
+      typeof item.liked === 'boolean' ||
+      Array.isArray(item.likes) ||
+      Array.isArray(item.likeUsers);
     if (hasServerLikedInfo && typeof serverIsLiked !== 'undefined') {
       setLiked(!!serverIsLiked);
     }
-  }, [serverLikeCount, serverIsLiked, item.id]);
+  }, [serverLikeCount, serverIsLiked, item.id, user?.id, Array.isArray(item.likeUsers) ? item.likeUsers.length : 0]);
 
   const onLike = async () => {
     if (!isAuthenticated || likeSubmitting) return;
@@ -61,7 +72,7 @@ export default function ItemDetailPage() {
     setCount(Math.max(0, prevCount + (nextLiked ? 1 : -1)));
     try {
       await axios.post(`/api/items/${id}/like`);
-      await qc.invalidateQueries(['item:detail', id]);
+      await qc.invalidateQueries(['item:detail', id, user?.id || null]);
     } catch (e) {
       // rollback on error
       setLiked(prevLiked);
@@ -109,14 +120,14 @@ export default function ItemDetailPage() {
           onClick={onLike}
           disabled={!isAuthenticated || likeSubmitting}
           className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-md border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60"
-          aria-label={(liked ? t('item.unlike', { defaultValue: 'Unlike' }) : t('item.like', { defaultValue: 'Like' }))}
+          aria-label={t('item.toggleLike', { defaultValue: 'Toggle like' })}
         >
           {liked ? (
             <Heart className="h-4 w-4 text-red-500" fill="currentColor" />
           ) : (
             <Heart className="h-4 w-4" />
           )}
-          {(liked ? t('item.unlike', { defaultValue: 'Unlike' }) : t('item.like', { defaultValue: 'Like' }))} • {count}
+          {(liked ? t('item.liked', { defaultValue: 'Liked' }) : t('item.like', { defaultValue: 'Like' }))} • {count}
         </button>
       </div>
 
@@ -132,12 +143,18 @@ export default function ItemDetailPage() {
         <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
           <Package className="h-4 w-4" />
           <span className="font-medium">{t('fields.inventory', { defaultValue: 'Inventory' })}</span>:
-          <span>{item.inventoryTitle || item.inventory?.title || '-'}</span>
+          <span>{item.inventoryTitle || item.inventory?.title || item.Inventory?.title || '-'}</span>
         </div>
         <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
           <UserIcon className="h-4 w-4" />
           <span className="font-medium">{t('fields.owner', { defaultValue: 'Owner' })}</span>:
-          <span>{item.ownerName || item.owner?.name || '-'}</span>
+          <span>{
+            item.ownerName ||
+            item.owner?.name ||
+            item.creator?.username ||
+            (item.creator?.firstName || item.creator?.lastName ? `${item.creator?.firstName ?? ''} ${item.creator?.lastName ?? ''}`.trim() : '') ||
+            '-'
+          }</span>
         </div>
         <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
           <HashIcon className="h-4 w-4" />

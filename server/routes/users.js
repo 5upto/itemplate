@@ -2,8 +2,28 @@ const express = require('express');
 const passport = require('passport');
 const { Op } = require('sequelize');
 const { User, Inventory, InventoryAccess, Category } = require('../models');
+const multer = require('multer');
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const cloudinary = require('cloudinary').v2;
 
 const router = express.Router();
+
+// Configure Cloudinary for avatar uploads
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+const avatarStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: 'user-avatars',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+    transformation: [{ width: 256, height: 256, crop: 'fill', gravity: 'faces' }],
+  },
+});
+const uploadAvatar = multer({ storage: avatarStorage });
 
 // Get all users (admin only)
 router.get('/',
@@ -75,6 +95,25 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// Update current user's avatar
+router.post('/me/avatar',
+  passport.authenticate('jwt', { session: false }),
+  uploadAvatar.single('file'),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: 'No file uploaded' });
+      }
+      const url = req.file.secure_url || req.file.path;
+      await req.user.update({ avatar: url });
+      return res.json({ message: 'Avatar updated', avatar: url });
+    } catch (error) {
+      console.error('Error updating avatar:', error);
+      return res.status(500).json({ message: 'Failed to update avatar' });
+    }
+  }
+);
+
 // Get user's inventories (own and accessible)
 router.get('/:id/inventories',
   passport.authenticate('jwt', { session: false }),
@@ -93,21 +132,35 @@ router.get('/:id/inventories',
         ],
         order: [['createdAt', 'DESC']]
       });
-      
+
       // Get accessible inventories
-      const accessibleInventories = await Inventory.findAll({
-        include: [
-          {
-            model: User,
-            as: 'accessUsers',
-            where: { id: req.params.id },
-            through: { attributes: ['canWrite'] }
-          },
-          { model: User, as: 'creator', attributes: ['id', 'username', 'firstName', 'lastName'] },
-          { model: Category, attributes: ['id', 'name'] }
-        ],
-        order: [['createdAt', 'DESC']]
-      });
+      let accessibleInventories;
+      if (req.user.isAdmin) {
+        // Admins can access everything: show all inventories not owned by the target user
+        accessibleInventories = await Inventory.findAll({
+          where: { creatorId: { [Op.ne]: req.params.id } },
+          include: [
+            { model: User, as: 'creator', attributes: ['id', 'username', 'firstName', 'lastName'] },
+            { model: Category, attributes: ['id', 'name'] }
+          ],
+          order: [['createdAt', 'DESC']]
+        });
+      } else {
+        // Non-admin: only those shared with the target user
+        accessibleInventories = await Inventory.findAll({
+          include: [
+            {
+              model: User,
+              as: 'accessUsers',
+              where: { id: req.params.id },
+              through: { attributes: ['canWrite'] }
+            },
+            { model: User, as: 'creator', attributes: ['id', 'username', 'firstName', 'lastName'] },
+            { model: Category, attributes: ['id', 'name'] }
+          ],
+          order: [['createdAt', 'DESC']]
+        });
+      }
       
       res.json({
         owned: ownedInventories,

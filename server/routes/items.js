@@ -10,6 +10,14 @@ const { Item, Inventory, User, ItemLike, InventoryAccess } = require('../models'
 
 const router = express.Router();
 
+// Middleware to attempt JWT auth but proceed even if unauthenticated
+const tryAuth = (req, res, next) => {
+  passport.authenticate('jwt', { session: false }, (err, user) => {
+    if (user) req.user = user;
+    return next();
+  })(req, res, next);
+};
+
 // Cloudinary configuration for item images
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -124,7 +132,7 @@ router.post('/upload',
 );
 
 // Get items for inventory
-router.get('/inventory/:inventoryId', async (req, res) => {
+router.get('/inventory/:inventoryId', tryAuth, async (req, res) => {
   try {
     const { page = 1, limit = 50, sortBy = 'createdAt', sortOrder = 'DESC', search } = req.query;
     const offset = (page - 1) * limit;
@@ -176,7 +184,7 @@ router.get('/inventory/:inventoryId', async (req, res) => {
 });
 
 // Get single item
-router.get('/:id', async (req, res) => {
+router.get('/:id', tryAuth, async (req, res) => {
   try {
     const item = await Item.findByPk(req.params.id, {
       include: [

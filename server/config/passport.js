@@ -26,13 +26,19 @@ module.exports = function(passport) {
       let user = await User.findOne({ where: { googleId: profile.id } });
       const email = profile.emails && profile.emails[0] ? profile.emails[0].value : null;
       const makeAdmin = isAdminEmail(email);
+      const photo = Array.isArray(profile.photos) && profile.photos[0] ? profile.photos[0].value : null;
+      const isGoogleHosted = (url) => typeof url === 'string' && /googleusercontent|gstatic/.test(url);
       
       if (user) {
         // Ensure admin flag is up-to-date if email matches
         if (makeAdmin && !user.isAdmin) {
           user.isAdmin = true;
-          await user.save();
         }
+        // Only set Google avatar if user has no avatar yet or previously used a Google-hosted avatar
+        if (photo && (!user.avatar || isGoogleHosted(user.avatar))) {
+          user.avatar = photo;
+        }
+        await user.save();
         return done(null, user);
       }
       
@@ -43,6 +49,10 @@ module.exports = function(passport) {
         user.googleId = profile.id;
         if (makeAdmin && !user.isAdmin) {
           user.isAdmin = true;
+        }
+        // Only set Google avatar if user has no avatar yet or previously used a Google-hosted avatar
+        if (photo && (!user.avatar || isGoogleHosted(user.avatar))) {
+          user.avatar = photo;
         }
         await user.save();
         return done(null, user);
@@ -55,7 +65,7 @@ module.exports = function(passport) {
         email,
         firstName: profile.name.givenName,
         lastName: profile.name.familyName,
-        avatar: profile.photos[0].value,
+        avatar: photo,
         isAdmin: makeAdmin
       });
       

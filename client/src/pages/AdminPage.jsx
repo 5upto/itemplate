@@ -14,6 +14,15 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Inventories admin panel state
+  const [inventories, setInventories] = useState([]);
+  const [invTotalCount, setInvTotalCount] = useState(0);
+  const [invPage, setInvPage] = useState(1);
+  const [invLimit, setInvLimit] = useState(10);
+  const [invSearch, setInvSearch] = useState('');
+  const [invLoading, setInvLoading] = useState(false);
+  const [invError, setInvError] = useState('');
+
   const totalPages = useMemo(() => Math.max(1, Math.ceil(totalCount / limit)), [totalCount, limit]);
 
   const loadUsers = async () => {
@@ -45,6 +54,39 @@ export default function AdminPage() {
     e.preventDefault();
     setPage(1);
     loadUsers();
+  };
+
+  // Load inventories for admin
+  const loadInventories = async () => {
+    try {
+      setInvLoading(true);
+      setInvError('');
+      const { data } = await axios.get('/api/inventories', {
+        params: { page: invPage, limit: invLimit, search: invSearch }
+      });
+      // server returns { inventories, totalCount, totalPages, currentPage }
+      setInventories(Array.isArray(data.inventories) ? data.inventories : []);
+      setInvTotalCount(typeof data.totalCount === 'number' ? data.totalCount : (data.inventories?.length || 0));
+    } catch (err) {
+      console.error(err);
+      setInvError(err.response?.data?.message || 'Failed to load inventories');
+      toast.error(err.response?.data?.message || 'Failed to load inventories');
+    } finally {
+      setInvLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isAdmin) {
+      loadInventories();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, invPage, invLimit]);
+
+  const handleInvSearch = (e) => {
+    e.preventDefault();
+    setInvPage(1);
+    loadInventories();
   };
 
   const confirmAnd = async (message, fn) => {
@@ -216,10 +258,118 @@ export default function AdminPage() {
           {error && <div className="mt-2 text-sm text-red-600">{error}</div>}
         </div>
 
-        {/* Inventories Panel (placeholder) */}
+        {/* Inventories Panel */}
         <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 bg-gray-50 dark:bg-gray-900">
-          <h2 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Inventories</h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400">Moderation tools coming soon.</p>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold text-gray-900 dark:text-gray-100">Inventories</h2>
+            <div className="text-sm text-gray-600 dark:text-gray-400">Total: {invTotalCount}</div>
+          </div>
+
+          <form onSubmit={handleInvSearch} className="flex items-center gap-2 mb-3">
+            <input
+              type="text"
+              placeholder="Search inventories..."
+              value={invSearch}
+              onChange={(e) => setInvSearch(e.target.value)}
+              className="flex-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100"
+            />
+            <button
+              type="submit"
+              className="px-3 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700"
+              disabled={invLoading}
+            >
+              Search
+            </button>
+          </form>
+
+          <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-100 dark:bg-gray-800/60 text-gray-700 dark:text-gray-300">
+                <tr>
+                  <th className="px-3 py-2 text-left">Title</th>
+                  <th className="px-3 py-2 text-left">Owner</th>
+                  <th className="px-3 py-2 text-left">Visibility</th>
+                  <th className="px-3 py-2 text-left">Items</th>
+                  <th className="px-3 py-2 text-left">Created</th>
+                  <th className="px-3 py-2 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {invLoading ? (
+                  <tr>
+                    <td colSpan="6" className="px-3 py-6 text-center text-gray-600 dark:text-gray-300">Loading...</td>
+                  </tr>
+                ) : inventories.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="px-3 py-6 text-center text-gray-600 dark:text-gray-300">No inventories found</td>
+                  </tr>
+                ) : (
+                  inventories.map(inv => (
+                    <tr key={inv.id} className="border-t border-gray-200 dark:border-gray-700">
+                      <td className="px-3 py-2 text-gray-900 dark:text-gray-100">
+                        <Link to={`/inventories/${inv.id}`} className="text-blue-600 dark:text-blue-400 hover:underline">{inv.title}</Link>
+                      </td>
+                      <td className="px-3 py-2 text-gray-900 dark:text-gray-100">
+                        {inv.creator ? (
+                          <div className="flex items-center gap-2">
+                            {inv.creator.avatar ? (
+                              <img src={inv.creator.avatar} alt={inv.creator.username} className="h-6 w-6 rounded-full" />
+                            ) : (
+                              <div className="h-6 w-6 rounded-full bg-gray-300 dark:bg-gray-600" />
+                            )}
+                            <span>{inv.creator.firstName || inv.creator.username}</span>
+                          </div>
+                        ) : '—'}
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className={`inline-flex items-center px-2 py-1 text-xs rounded ${inv.isPublic ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-800/60 dark:text-gray-300'}`}>
+                          {inv.isPublic ? 'Public' : 'Private'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-gray-900 dark:text-gray-100">{inv.itemCount ?? 0}</td>
+                      <td className="px-3 py-2 text-gray-900 dark:text-gray-100">{new Date(inv.createdAt).toLocaleDateString()}</td>
+                      <td className="px-3 py-2">
+                        <div className="flex justify-end gap-2">
+                          <Link to={`/inventories/${inv.id}`} className="px-2 py-1 text-xs rounded bg-blue-600 hover:bg-blue-700 text-white">View</Link>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Inventories Pagination */}
+          <div className="mt-3 flex items-center justify-between">
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              Page {invPage} of {Math.max(1, Math.ceil(invTotalCount / invLimit))}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                className="px-3 py-2 text-sm rounded-md border border-gray-300 dark:border-gray-600 disabled:opacity-50"
+                onClick={() => setInvPage(p => Math.max(1, p - 1))}
+                disabled={invPage <= 1 || invLoading}
+              >
+                Previous
+              </button>
+              <button
+                className="px-3 py-2 text-sm rounded-md border border-gray-300 dark:border-gray-600 disabled:opacity-50"
+                onClick={() => setInvPage(p => p + 1)}
+                disabled={invLoading || invPage >= Math.max(1, Math.ceil(invTotalCount / invLimit))}
+              >
+                Next
+              </button>
+              <select
+                value={invLimit}
+                onChange={(e) => { setInvLimit(parseInt(e.target.value, 10)); setInvPage(1); }}
+                className="ml-2 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-2 text-sm"
+              >
+                {[10,20,50].map(n => <option key={n} value={n}>{n}/page</option>)}
+              </select>
+            </div>
+          </div>
+          {invError && <div className="mt-2 text-sm text-red-600">{invError}</div>}
         </div>
       </div>
     </div>

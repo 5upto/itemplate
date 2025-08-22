@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useQuery } from 'react-query';
+import { useQuery, useMutation, useQueryClient } from 'react-query';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import LoadingSpinner from '../components/UI/LoadingSpinner';
@@ -8,8 +8,12 @@ import InventoryCard from '../components/Inventory/InventoryCard';
 
 export default function ProfilePage() {
   const { id } = useParams();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const idToLoad = id || user?.id;
+  const isOwnProfile = !!user && String(user.id) === String(idToLoad);
+  const queryClient = useQueryClient();
+  const fileInputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
 
   const { data, isLoading, isError, error } = useQuery(
     ['user:profile', idToLoad],
@@ -29,6 +33,39 @@ export default function ProfilePage() {
       staleTime: 2 * 60 * 1000,
     }
   );
+
+  const avatarMutation = useMutation(
+    async (file) => {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await axios.post('/api/users/me/avatar', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return res.data;
+    },
+    {
+      onMutate: () => setUploading(true),
+      onSettled: async () => {
+        setUploading(false);
+        // Refresh current user (Navbar avatar) and this profile
+        await refreshUser?.();
+        await queryClient.invalidateQueries(['user:profile', idToLoad]);
+      },
+    }
+  );
+
+  const handleAvatarClick = () => {
+    if (isOwnProfile && fileInputRef.current && !uploading) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) avatarMutation.mutate(file);
+    // reset input so selecting same file again retriggers change
+    e.target.value = '';
+  };
 
   if (!idToLoad) {
     return (
@@ -57,11 +94,42 @@ export default function ProfilePage() {
   return (
     <div className="max-w-6xl mx-auto p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
       <div className="flex items-center gap-4 mb-6">
-        {profile.avatar ? (
-          <img src={profile.avatar} alt={fullName} className="w-16 h-16 rounded-full object-cover" />
-        ) : (
-          <div className="w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-700" />
-        )}
+        <div className="relative">
+          {profile.avatar ? (
+            <img
+              src={`${profile.avatar}${profile.avatar.includes('?') ? '&' : '?'}_=${Date.now()}`}
+              referrerPolicy="no-referrer"
+              onError={(e) => {
+                const name = encodeURIComponent(fullName || profile.username || 'User');
+                e.currentTarget.src = `https://ui-avatars.com/api/?name=${name}&background=random`;
+              }}
+              alt={fullName}
+              className="w-16 h-16 rounded-full object-cover"
+            />
+          ) : (
+            <div className="w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-700" />
+          )}
+          {isOwnProfile && (
+            <>
+              <button
+                type="button"
+                onClick={handleAvatarClick}
+                disabled={uploading}
+                title={uploading ? 'Uploading…' : 'Edit avatar'}
+                className="absolute -bottom-1 -right-1 inline-flex items-center justify-center w-7 h-7 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-xs shadow disabled:opacity-60"
+              >
+                {uploading ? '…' : '✎'}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+            </>
+          )}
+        </div>
         <div>
           <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">{fullName}</h1>
           <p className="text-gray-600 dark:text-gray-400">{profile.email}</p>

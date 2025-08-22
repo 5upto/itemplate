@@ -100,7 +100,12 @@ const Navbar = () => {
                 >
                   {user.avatar ? (
                     <img 
-                      src={user.avatar} 
+                      src={user.avatar}
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        const name = encodeURIComponent(user.firstName || user.username || 'User');
+                        e.currentTarget.src = `https://ui-avatars.com/api/?name=${name}&background=random`;
+                      }} 
                       alt={user.username}
                       className="h-8 w-8 rounded-full"
                     />

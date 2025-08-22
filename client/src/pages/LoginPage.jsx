@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 export default function LoginPage() {
   const serverUrl = import.meta.env.VITE_SERVER_URL || window.location.origin;
   const { login } = useAuth();
+  const navigate = useNavigate();
 
   const [mode, setMode] = useState('login'); // 'login' | 'signup'
   const [form, setForm] = useState({
@@ -37,6 +38,7 @@ export default function LoginPage() {
         if (data?.token) {
           login(data.token);
           toast.success('Logged in successfully');
+          navigate('/', { replace: true });
         } else {
           toast.error('Login succeeded but no token returned');
         }
@@ -51,6 +53,7 @@ export default function LoginPage() {
         if (data?.token) {
           login(data.token);
           toast.success('Account created and logged in');
+          navigate('/', { replace: true });
         } else {
           toast.success('Account created');
         }

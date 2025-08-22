@@ -8,6 +8,13 @@ const { Inventory, User, Category, Tag, Item, InventoryAccess } = require('../mo
 
 const router = express.Router();
 
+// Middleware to attempt JWT auth but proceed if missing/invalid
+const tryAuth = (req, res, next) => {
+  passport.authenticate('jwt', { session: false }, (err, user) => {
+    if (user) req.user = user;
+    return next();
+  })(req, res, next);
+};
 // Cloudinary configuration
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -39,11 +46,14 @@ const checkInventoryAccess = async (req, res, next) => {
       return res.status(404).json({ message: 'Inventory not found' });
     }
     
-    // Check if user is creator, admin, or has access
-    const hasAccess = !req.user || 
-      req.user.isAdmin || 
-      inventory.creatorId === req.user.id ||
-      inventory.accessUsers.some(user => user.id === req.user.id);
+    // Allow if inventory is public, or user is creator/admin/has access
+    const hasAccess = inventory.isPublic || (
+      req.user && (
+        req.user.isAdmin ||
+        inventory.creatorId === req.user.id ||
+        inventory.accessUsers.some(user => user.id === req.user.id)
+      )
+    );
     
     if (!hasAccess) {
       return res.status(403).json({ message: 'Access denied' });
@@ -58,7 +68,8 @@ const checkInventoryAccess = async (req, res, next) => {
 };
 
 // Get all inventories with pagination and filters
-router.get('/', async (req, res) => {
+// Admins see all. Authenticated non-admins see their own, shared, or public. Guests see public only.
+router.get('/', tryAuth, async (req, res) => {
   try {
     const { page = 1, limit = 10, category, tags, search, sortBy = 'createdAt', sortOrder = 'DESC' } = req.query;
     const offset = (page - 1) * limit;
@@ -93,6 +104,34 @@ router.get('/', async (req, res) => {
         through: { attributes: [] },
         required: true
       });
+    }
+
+    // Visibility rules
+    if (req.user?.isAdmin) {
+      // admins see everything; no extra filter
+    } else if (req.user) {
+      // authenticated non-admins: own, shared, or public
+      include.push({
+        model: User,
+        as: 'accessUsers',
+        attributes: ['id'],
+        through: { attributes: [] },
+        where: { id: req.user.id },
+        required: false,
+      });
+
+      // combine with existing whereClause (preserving search/category/tag constraints)
+      whereClause = {
+        ...whereClause,
+        [Op.or]: [
+          { isPublic: true },
+          { creatorId: req.user.id },
+          { '$accessUsers.id$': req.user.id },
+        ],
+      };
+    } else {
+      // guests: only public
+      whereClause = { ...whereClause, isPublic: true };
     }
     
     const { count, rows } = await Inventory.findAndCountAll({
@@ -176,7 +215,7 @@ router.get('/popular', async (req, res) => {
 });
 
 // Get single inventory
-router.get('/:id', checkInventoryAccess, async (req, res) => {
+router.get('/:id', tryAuth, checkInventoryAccess, async (req, res) => {
   try {
     const inventory = await Inventory.findByPk(req.params.id, {
       include: [

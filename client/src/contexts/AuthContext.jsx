@@ -82,6 +82,7 @@ export const AuthProvider = ({ children }) => {
     login,
     logout,
     updatePreferences,
+    refreshUser: fetchUser,
     isAuthenticated: !!user,
     isAdmin: user?.isAdmin || false
   };
