@@ -33,6 +33,16 @@ const HomePage = () => {
     { staleTime: 10 * 60 * 1000 }
   );
 
+  // When logged in, load a small personalized slice for Home
+  const {
+    data: myInvData,
+    isLoading: loadingMyInv,
+  } = useQuery(
+    ['user:inventories:home', user?.id],
+    () => axios.get(`/api/users/${user.id}/inventories`).then((r) => r.data),
+    { enabled: !!user?.id, staleTime: 2 * 60 * 1000 }
+  );
+
   // Safety helpers for potentially non-array API results
   const safeArray = (v) => (Array.isArray(v) ? v : []);
 
@@ -86,13 +96,13 @@ const HomePage = () => {
             variants={itemVariants}
             className="text-5xl md:text-6xl font-bold mb-6 leading-tight"
           >
-            {t('home.welcome')}
+            {user ? `Welcome back${user.firstName ? ", " + user.firstName : ''}!` : t('home.welcome')}
           </motion.h1>
           <motion.p 
             variants={itemVariants}
             className="text-xl md:text-2xl mb-8 text-blue-100 leading-relaxed"
           >
-            {t('home.subtitle')}
+            {user ? 'Quickly jump back into your inventories or create a new one.' : t('home.subtitle')}
           </motion.p>
           <motion.div
             variants={itemVariants}
@@ -105,12 +115,20 @@ const HomePage = () => {
               {t('home.exploreInventories')}
             </Link>
             {user ? (
-              <Link
-                to="/inventories/create"
-                className="bg-transparent border-2 border-white text-white px-8 py-4 rounded-lg font-semibold text-lg hover:bg-white hover:text-blue-600 transition-colors shadow-lg hover:shadow-xl transform hover:scale-105 duration-200"
-              >
-                Create Inventory
-              </Link>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <Link
+                  to="/inventories/create"
+                  className="bg-transparent border-2 border-white text-white px-8 py-4 rounded-lg font-semibold text-lg hover:bg-white hover:text-blue-600 transition-colors shadow-lg hover:shadow-xl transform hover:scale-105 duration-200"
+                >
+                  Create Inventory
+                </Link>
+                <Link
+                  to={user?.id ? `/profile/${user.id}` : '/profile'}
+                  className="bg-white/10 border-2 border-white/40 text-white px-8 py-4 rounded-lg font-semibold text-lg hover:bg-white hover:text-blue-600 transition-colors shadow-lg hover:shadow-xl transform hover:scale-105 duration-200"
+                >
+                  Go to Profile
+                </Link>
+              </div>
             ) : (
               <Link
                 to="/login"
@@ -122,6 +140,56 @@ const HomePage = () => {
           </motion.div>
         </div>
       </motion.section>
+
+      {/* Personalized section for authenticated users */}
+      {user && (
+        <motion.section variants={itemVariants} className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Your Inventories</h2>
+            <Link
+              to="/inventories/create"
+              className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"
+            >
+              + Create
+            </Link>
+          </div>
+
+          {loadingMyInv ? (
+            <div className="flex justify-center py-12">
+              <LoadingSpinner size="lg" />
+            </div>
+          ) : (
+            (() => {
+              const owned = Array.isArray(myInvData?.owned) ? myInvData.owned : [];
+              return owned.length === 0 ? (
+                <div className="text-center bg-white dark:bg-gray-800 rounded-xl p-8 border border-gray-200 dark:border-gray-700">
+                  <p className="text-gray-700 dark:text-gray-300 mb-4">You don't have any inventories yet.</p>
+                  <Link
+                    to="/inventories/create"
+                    className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-md"
+                  >
+                    Create your first inventory
+                  </Link>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {owned.slice(0, 8).map((inv, index) => (
+                    <motion.div
+                      key={inv.id}
+                      variants={itemVariants}
+                      custom={index}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <InventoryCard inventory={{ ...inv, itemCount: inv.itemCount ?? 0 }} />
+                    </motion.div>
+                  ))}
+                </div>
+              );
+            })()
+          )}
+        </motion.section>
+      )}
 
       {/* Stats Section */}
       <motion.section variants={itemVariants} className="grid grid-cols-1 md:grid-cols-3 gap-8">

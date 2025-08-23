@@ -1,9 +1,21 @@
 @import "tailwindcss";
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0; /* remove default margins so layout can span full width */
+}
+
 #root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  width: 100%;
+  max-width: none; /* allow full-width */
+  margin: 0; /* no centering */
+  padding: 0; /* let pages manage their own spacing (or adjust as needed) */
+  text-align: left; /* avoid centering everything globally */
+  min-height: 100vh;
+  box-sizing: border-box;
 }
 
 .logo {
@@ -27,6 +39,38 @@
     transform: rotate(360deg);
   }
 }
+
+/* Dark mode overrides without Tailwind config: use data-theme set by ThemeContext */
+html[data-theme="dark"] body {
+  background-color: #0f172a; /* gray-900/slate-900 */
+  color: #e5e7eb; /* gray-200 */
+}
+
+/* Common backgrounds */
+html[data-theme="dark"] .bg-white { background-color: #1f2937 !important; } /* gray-800 */
+html[data-theme="dark"] .bg-gray-50 { background-color: #0f172a !important; } /* page bg */
+html[data-theme="dark"] .bg-gray-100 { background-color: #111827 !important; }
+html[data-theme="dark"] .bg-gray-200 { background-color: #1f2937 !important; }
+
+/* Text colors */
+html[data-theme="dark"] .text-gray-900 { color: #f3f4f6 !important; }
+html[data-theme="dark"] .text-gray-800 { color: #e5e7eb !important; }
+html[data-theme="dark"] .text-gray-700 { color: #d1d5db !important; }
+html[data-theme="dark"] .text-gray-600 { color: #9ca3af !important; }
+html[data-theme="dark"] .text-gray-500 { color: #9ca3af !important; }
+
+/* Borders */
+html[data-theme="dark"] .border-gray-200 { border-color: #374151 !important; }
+html[data-theme="dark"] .border-gray-300 { border-color: #4b5563 !important; }
+html[data-theme="dark"] .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { border-color: #374151 !important; }
+
+/* Hover states used in Navbar/menu */
+html[data-theme="dark"] .hover\:bg-gray-100:hover { background-color: #374151 !important; }
+html[data-theme="dark"] .hover\:bg-gray-50:hover { background-color: #1f2937 !important; }
+
+/* Card/table surfaces */
+html[data-theme="dark"] .shadow, 
+html[data-theme="dark"] .shadow-lg { box-shadow: 0 1px 2px 0 rgba(0,0,0,.4), 0 1px 3px 1px rgba(0,0,0,.3) !important; }
 
 @media (prefers-reduced-motion: no-preference) {
   a:nth-of-type(2) .logo {

@@ -57,9 +57,7 @@ function AppContent() {
   const { theme } = useTheme();
   const { i18n } = useTranslation();
   
-  useEffect(() => {
-    document.documentElement.className = theme;
-  }, [theme]);
+  // Theme is applied globally by ThemeContext; avoid overriding here.
   
   useEffect(() => {
     document.documentElement.lang = i18n.language;

@@ -4,7 +4,7 @@ const passport = require('passport');
 const multer = require('multer');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const cloudinary = require('cloudinary').v2;
-const { Inventory, User, Category, Tag, Item, InventoryAccess } = require('../models');
+const { Inventory, User, Category, Tag, Item, InventoryAccess, sequelize } = require('../models');
 
 const router = express.Router();
 
@@ -78,7 +78,6 @@ router.get('/', tryAuth, async (req, res) => {
     let include = [
       { model: User, as: 'creator', attributes: ['id', 'username', 'firstName', 'lastName', 'avatar'] },
       { model: Category, attributes: ['id', 'name'] },
-      { model: Tag, attributes: ['id', 'name'], through: { attributes: [] } },
       { model: Item, attributes: ['id'], required: false }
     ];
     
@@ -95,14 +94,22 @@ router.get('/', tryAuth, async (req, res) => {
       whereClause.categoryId = category;
     }
     
-    // Tags filter
+    // Tags include / filter (ensure Tag is included only once)
     if (tags) {
       const tagNames = tags.split(',');
       include.push({
         model: Tag,
+        attributes: ['id', 'name'],
         where: { name: { [Op.in]: tagNames } },
         through: { attributes: [] },
         required: true
+      });
+    } else {
+      include.push({
+        model: Tag,
+        attributes: ['id', 'name'],
+        through: { attributes: [] },
+        required: false
       });
     }
 
@@ -116,17 +123,22 @@ router.get('/', tryAuth, async (req, res) => {
         as: 'accessUsers',
         attributes: ['id'],
         through: { attributes: [] },
-        where: { id: req.user.id },
         required: false,
       });
 
       // combine with existing whereClause (preserving search/category/tag constraints)
+      const accessTable = InventoryAccess.getTableName();
+      const escapedUserId = sequelize.escape(req.user.id);
       whereClause = {
         ...whereClause,
         [Op.or]: [
           { isPublic: true },
           { creatorId: req.user.id },
-          { '$accessUsers.id$': req.user.id },
+          // shared with user via InventoryAccess through table
+          sequelize.where(
+            sequelize.literal(`EXISTS (SELECT 1 FROM "${accessTable}" ia WHERE ia."inventoryId" = "Inventory"."id" AND ia."userId" = ${escapedUserId})`),
+            true
+          ),
         ],
       };
     } else {

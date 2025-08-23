@@ -119,7 +119,7 @@ router.get('/:id/inventories',
   passport.authenticate('jwt', { session: false }),
   async (req, res) => {
     try {
-      if (req.user.id !== req.params.id && !req.user.isAdmin) {
+      if (String(req.user.id) !== String(req.params.id) && !req.user.isAdmin) {
         return res.status(403).json({ message: 'Access denied' });
       }
       
@@ -146,18 +146,27 @@ router.get('/:id/inventories',
           order: [['createdAt', 'DESC']]
         });
       } else {
-        // Non-admin: only those shared with the target user
+        // Non-admin: public inventories not owned by the user OR inventories explicitly shared with the user
         accessibleInventories = await Inventory.findAll({
+          where: {
+            creatorId: { [Op.ne]: req.params.id },
+            [Op.or]: [
+              { isPublic: true },
+              { '$accessUsers.id$': req.params.id }
+            ]
+          },
           include: [
             {
               model: User,
               as: 'accessUsers',
-              where: { id: req.params.id },
-              through: { attributes: ['canWrite'] }
+              attributes: ['id'],
+              through: { attributes: ['canWrite'] },
+              required: false
             },
             { model: User, as: 'creator', attributes: ['id', 'username', 'firstName', 'lastName'] },
             { model: Category, attributes: ['id', 'name'] }
           ],
+          distinct: true,
           order: [['createdAt', 'DESC']]
         });
       }

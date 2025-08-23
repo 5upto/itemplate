@@ -15,7 +15,12 @@ export const ThemeProvider = ({ children }) => {
   const { user, updatePreferences } = useAuth();
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem('theme');
-    return saved || 'light';
+    if (saved === 'light' || saved === 'dark') return saved;
+    // fallback to system preference
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    return 'light';
   });
 
   useEffect(() => {
@@ -23,6 +28,16 @@ export const ThemeProvider = ({ children }) => {
       setTheme(user.theme);
     }
   }, [user]);
+
+  // Apply theme to the document root so CSS (and Tailwind dark: classes if present) take effect
+  useEffect(() => {
+    const root = document.documentElement;
+    if (!root) return;
+    root.classList.toggle('dark', theme === 'dark');
+    root.setAttribute('data-theme', theme);
+    // Improve native form controls, scrollbars on supported browsers
+    document.body && (document.body.style.colorScheme = theme);
+  }, [theme]);
 
   const toggleTheme = async () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
