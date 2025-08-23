@@ -63,8 +63,6 @@ itemplate/
    │  └─ passport.js
    ├─ models/
    │  └─ index.js
-   ├─ package-lock.json
-   ├─ package.json
    ├─ routes/
    │  ├─ auth.js
    │  ├─ categories.js
