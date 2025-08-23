@@ -11,64 +11,53 @@ Full‑stack inventory management boilerplate with authentication, real‑time u
 
 ```
 itemplate/
-├─ .gitignore
-├─ README.md
 ├─ client/
-│  ├─ .env
-│  ├─ dist/
-│  ├─ eslint.config.js
-│  ├─ index.html
-│  ├─ package-lock.json
-│  ├─ package.json
-│  ├─ public/
-│  │  └─ vite.svg
-│  ├─ src/
-│  │  ├─ App.css
-│  │  ├─ App.jsx
-│  │  ├─ api/
-│  │  │  └─ endpoints.js
-│  │  ├─ assets/
-│  │  │  └─ react.svg
-│  │  ├─ components/
-│  │  │  ├─ Inventory/
-│  │  │  │  └─ InventoryCard.jsx
-│  │  │  ├─ Layout/
-│  │  │  │  └─ Navbar.jsx
-│  │  │  ├─ Search/
-│  │  │  │  └─ SearchBar.jsx
-│  │  │  └─ UI/
-│  │  │     ├─ LanguageSelector.jsx
-│  │  │     ├─ LoadingSpinner.jsx
-│  │  │     └─ TagCloud.jsx
-│  │  ├─ contexts/
-│  │  │  ├─ AuthContext.jsx
-│  │  │  ├─ SocketContext.jsx
-│  │  │  └─ ThemeContext.jsx
-│  │  ├─ i18n/
-│  │  │  ├─ config.js
-│  │  │  └─ locales/
-│  │  │     ├─ en.json
-│  │  │     └─ es.json
-│  │  ├─ index.css
-│  │  ├─ main.jsx
-│  │  ├─ pages/
-│  │  │  ├─ AdminPage.jsx
-│  │  │  ├─ AuthSuccess.jsx
-│  │  │  ├─ CreateInventoryPage.jsx
-│  │  │  ├─ CreateItemPage.jsx
-│  │  │  ├─ EditInventoryPage.jsx
-│  │  │  ├─ HomePage.jsx
-│  │  │  ├─ InventoryDetailPage.jsx
-│  │  │  ├─ InventoryListPage.jsx
-│  │  │  ├─ ItemDetailPage.jsx
-│  │  │  ├─ LoginPage.jsx
-│  │  │  ├─ NotFoundPage.jsx
-│  │  │  ├─ ProfilePage.jsx
-│  │  │  └─ SearchResultsPage.jsx
-│  │  └─ setupAxios.js
-│  └─ vite.config.js
+│  └─ src/
+│    ├─ App.css
+│    ├─ App.jsx
+│    ├─ api/
+│    │  └─ endpoints.js
+│    ├─ assets/
+│    │  └─ react.svg
+│    ├─ components/
+│    │  ├─ Inventory/
+│    │  │  └─ InventoryCard.jsx
+│    │  ├─ Layout/
+│    │  │  └─ Navbar.jsx
+│    │  ├─ Search/
+│    │  │  └─ SearchBar.jsx
+│    │  └─ UI/
+│    │     ├─ LanguageSelector.jsx
+│    │     ├─ LoadingSpinner.jsx
+│    │     └─ TagCloud.jsx
+│    ├─ contexts/
+│    │  ├─ AuthContext.jsx
+│    │  ├─ SocketContext.jsx
+│    │  └─ ThemeContext.jsx
+│    ├─ i18n/
+│    │  ├─ config.js
+│    │  └─ locales/
+│    │     ├─ en.json
+│    │     └─ es.json
+│    ├─ index.css
+│    ├─ main.jsx
+│    ├─ pages/
+│    │  ├─ AdminPage.jsx
+│    │  ├─ AuthSuccess.jsx
+│    │  ├─ CreateInventoryPage.jsx
+│    │  ├─ CreateItemPage.jsx
+│    │  ├─ EditInventoryPage.jsx
+│    │  ├─ HomePage.jsx
+│    │  ├─ InventoryDetailPage.jsx
+│    │  ├─ InventoryListPage.jsx
+│    │  ├─ ItemDetailPage.jsx
+│    │  ├─ LoginPage.jsx
+│    │  ├─ NotFoundPage.jsx
+│    │  ├─ ProfilePage.jsx
+│    │  └─ SearchResultsPage.jsx
+│    └─ setupAxios.js
+│
 └─ server/
-   ├─ .env
    ├─ config/
    │  ├─ database.js
    │  └─ passport.js
