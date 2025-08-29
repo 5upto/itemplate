@@ -71,34 +71,106 @@ const previewCustomId = (format = [], itemCount = 0) => {
 };
 
 export default function InventoryDetailPage() {
+  // All hooks must be called unconditionally at the top level
   const { id } = useParams();
-
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  
+  // State hooks
+  const [fileKeys, setFileKeys] = React.useState({});
+  const [newItem, setNewItem] = useState({
+    title: '',
+    description: '',
+    string1: '', string2: '', string3: '',
+    int1: '', int2: '', int3: '',
+    bool1: false, bool2: false, bool3: false,
+  });
+  const [submitErr, setSubmitErr] = useState('');
+  const [selected, setSelected] = useState(() => new Set());
+  
+  // Data fetching
   const { data, isLoading, isError, error } = useQuery(
     ['inventory', id],
     () => axios.get(`/api/inventories/${id}`).then((r) => r.data),
     { enabled: !!id }
   );
-
+  
   // Items list for this inventory
-  // Prefer embedded items on the inventory payload to avoid extra requests
   const embeddedItems = Array.isArray(data?.items) ? data.items : null;
-  const fetchItems = async () => {
-    if (!canListItems()) return [];
+  const fetchItems = React.useCallback(async () => {
+    if (!canListItems() || !id) return [];
     return getItemsListRequest(id, axios);
-  };
-
-  // Force-remount keys for file inputs in quick add
-  const [fileKeys, setFileKeys] = React.useState({});
+  }, [id]);
+  
   const { data: itemsData, isLoading: itemsLoading, refetch: refetchItems } = useQuery(
     ['inventory:items', id],
     fetchItems,
     { enabled: !!id && !embeddedItems && canListItems() }
   );
+  
+  // Memoized values
+  const items = React.useMemo(() => {
+    return embeddedItems || itemsData || [];
+  }, [embeddedItems, itemsData]);
+  
+  const inv = React.useMemo(() => data || {}, [data]);
+  const itemCount = items.length;
+  const nextIdPreview = React.useMemo(() => 
+    previewCustomId((data?.customIdFormat || []), itemCount), [data?.customIdFormat, itemCount]);
+  const totalLikes = React.useMemo(() => {
+    try {
+      return items.reduce((acc, it) => acc + (Number(it?.likeCount) || 0), 0);
+    } catch { return 0; }
+  }, [items]);
 
-  const [newItem, setNewItem] = useState({ title: '', description: '', customFields: {} });
-  const [submitErr, setSubmitErr] = useState('');
-  const queryClient = useQueryClient();
-  const navigate = useNavigate();
+  // 14-day activity series from item creation timestamps
+  const activitySeries = React.useMemo(() => {
+    const days = 14;
+    const counts = Array(days).fill(0);
+    const now = new Date();
+    for (const it of items) {
+      const ts = it?.createdAt ? new Date(it.createdAt) : null;
+      if (!ts) continue;
+      const diffDays = Math.floor((now - ts) / (1000 * 60 * 60 * 24));
+      if (diffDays >= 0 && diffDays < days) counts[days - 1 - diffDays] += 1;
+    }
+    return counts;
+  }, [items]);
+
+  const spark = React.useMemo(() => {
+    const w = 120, h = 28;
+    const n = activitySeries.length || 1;
+    const max = Math.max(1, ...activitySeries);
+    const step = n > 1 ? (w / (n - 1)) : 0;
+    const points = activitySeries.map((v, i) => {
+      const x = i * step;
+      const y = h - (v / max) * (h - 2) - 1; // pad top/bottom by 1px
+      return `${x},${y}`;
+    });
+    const d = `M ${points.join(' L ')}`;
+    return { w, h, d, max };
+  }, [activitySeries]);
+
+  // Current user and role helpers
+  const { data: me } = useQuery(['me'], () => axios.get('/api/auth/me').then(r => r.data));
+  const currentUserId = me?.id;
+  const isAdmin = !!me?.isAdmin;
+  const isOwner = !!(currentUserId && inv?.creator?.id === currentUserId);
+  const canManageInventory = isOwner || isAdmin;
+
+  // Tabs state (some tabs only for owner/admin)
+  const TABS = ['Items', 'Chat', 'Settings', 'Custom ID', 'Fields', 'Access', 'Stats', 'Export'];
+  const [activeTab, setActiveTab] = useState('Items');
+
+  const visibleTabs = React.useMemo(() => {
+    const always = ['Items', 'Chat', 'Stats'];
+    const managed = ['Settings', 'Custom ID', 'Fields', 'Access', 'Export'];
+    return canManageInventory ? [...always.slice(0,2), ...managed, 'Stats'] : always;
+  }, [canManageInventory]);
+
+  React.useEffect(() => {
+    if (!visibleTabs.includes(activeTab)) setActiveTab(visibleTabs[0] || 'Items');
+  }, [visibleTabs, activeTab]);
 
   const addItemReq = async (payload) => {
     if (!canCreateItems()) throw new Error('Item creation endpoint is not configured');
@@ -106,7 +178,12 @@ export default function InventoryDetailPage() {
   };
   const addItemMutation = useMutation(addItemReq, {
     onSuccess: () => {
-      setNewItem({ title: '', description: '', customFields: {} });
+      setNewItem({
+        title: '', description: '',
+        string1: '', string2: '', string3: '',
+        int1: '', int2: '', int3: '',
+        bool1: false, bool2: false, bool3: false,
+      });
       setSubmitErr('');
       refetchItems();
       queryClient.invalidateQueries(['inventory', id]);
@@ -118,41 +195,74 @@ export default function InventoryDetailPage() {
 
   // Note: Do NOT early-return before hooks below; checks moved further down
 
-  const inv = data || {};
   const createdAt = inv.createdAt ? new Date(inv.createdAt).toLocaleString() : '';
-  const items = embeddedItems ?? (Array.isArray(itemsData) ? itemsData : []);
-  const itemCount = inv.itemCount ?? inv.itemsCount ?? items.length ?? 0;
-  const nextIdPreview = previewCustomId(inv.customIdFormat || [], itemCount);
 
-  // Normalize custom field definitions into a simple list of { key, type, label, required }
-  const fieldDefs = (() => {
+  // Selection handlers (hooks must be before any early return)
+  const isSelected = React.useCallback((id) => selected.has(id), [selected]);
+  const toggleSelect = React.useCallback((id) => setSelected((s) => {
+    const ns = new Set(s);
+    if (ns.has(id)) ns.delete(id); else ns.add(id);
+    return ns;
+  }), []);
+  const clearSelection = React.useCallback(() => setSelected(new Set()), []);
+  const allSelected = items.length > 0 && selected.size === items.length;
+  const toggleSelectAll = React.useCallback(() => {
+    setSelected((s) => s.size === items.length ? new Set() : new Set(items.map((it) => it.id)));
+  }, [items.length]);
+
+  // Per-row actions - delete mutation
+  const deleteMutation = useMutation(
+    async (itemId) => {
+      await axios.delete(`/api/items/${itemId}`);
+      return itemId;
+    },
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['inventory:items', id]);
+        queryClient.invalidateQueries(['inventory', id]);
+      },
+    }
+  );
+
+  // Build fixed-slot column definitions from inventory template metadata
+  const fixedSlotDefs = React.useMemo(() => {
     const defs = [];
-    const cf = inv.customFields || {};
-    const push = (arr, type) => {
-      if (!Array.isArray(arr)) return;
-      arr.forEach((entry) => {
-        if (typeof entry === 'string') {
-          defs.push({ key: entry, type, label: entry, required: false });
-        } else if (entry && typeof entry === 'object') {
-          const key = entry.key || entry.name || entry.label;
-          if (key) defs.push({ key, type, label: entry.label || key, required: !!entry.required });
-        }
-      });
+    const push = (state, name, key, type) => {
+      if (!state) return; // slot disabled
+      defs.push({ key, type, label: name || key });
     };
-    push(cf.singleLineText, 'string');
-    push(cf.multiLineText, 'text');
-    push(cf.numeric, 'number');
-    push(cf.boolean, 'boolean');
-    push(cf.documentImage, 'file');
+    // Determine which string labels are image/document types
+    const docSet = new Set(
+      Array.isArray(inv?.customFields?.documentImage) ? inv.customFields.documentImage : []
+    );
+    const pushString = (state, name, key) => {
+      if (!state) return;
+      const base = { key, label: name || key };
+      const type = (name && docSet.has(name)) ? 'file' : 'string';
+      defs.push({ ...base, type });
+    };
+    pushString(inv.custom_string1_state, inv.custom_string1_name, 'string1');
+    pushString(inv.custom_string2_state, inv.custom_string2_name, 'string2');
+    pushString(inv.custom_string3_state, inv.custom_string3_name, 'string3');
+    push(inv.custom_int1_state, inv.custom_int1_name, 'int1', 'number');
+    push(inv.custom_int2_state, inv.custom_int2_name, 'int2', 'number');
+    push(inv.custom_int3_state, inv.custom_int3_name, 'int3', 'number');
+    push(inv.custom_bool1_state, inv.custom_bool1_name, 'bool1', 'boolean');
+    push(inv.custom_bool2_state, inv.custom_bool2_name, 'bool2', 'boolean');
+    push(inv.custom_bool3_state, inv.custom_bool3_name, 'bool3', 'boolean');
     return defs;
-  })();
-
-  // Determine first image/file custom field key (if any)
-  const imageFieldKey = (fieldDefs.find((f) => f.type === 'file') || null)?.key || null;
-
-  // Tabs state
-  const TABS = ['Items', 'Chat', 'Settings', 'Custom ID', 'Fields', 'Access', 'Stats', 'Export'];
-  const [activeTab, setActiveTab] = useState('Items');
+  }, [
+    inv.custom_string1_state, inv.custom_string1_name,
+    inv.custom_string2_state, inv.custom_string2_name,
+    inv.custom_string3_state, inv.custom_string3_name,
+    inv.custom_int1_state, inv.custom_int1_name,
+    inv.custom_int2_state, inv.custom_int2_name,
+    inv.custom_int3_state, inv.custom_int3_name,
+    inv.custom_bool1_state, inv.custom_bool1_name,
+    inv.custom_bool2_state, inv.custom_bool2_name,
+    inv.custom_bool3_state, inv.custom_bool3_name,
+    inv.customFields?.documentImage,
+  ]);
 
   // Upload helpers
   const uploadItemImage = async (file) => {
@@ -171,6 +281,8 @@ export default function InventoryDetailPage() {
     if (!url) throw new Error('Upload failed');
     return url;
   };
+  // Alias: generic file upload uses the item image uploader (returns URL)
+  // const uploadFile = uploadItemImage;
 
   // Inventory update mutation (uses PUT with FormData to match server contract)
   const updateInventory = async (payload) => {
@@ -202,6 +314,64 @@ export default function InventoryDetailPage() {
       imageUrl: inv.image || inv.imageUrl || ''
     });
   }, [inv.title, inv.description, inv.isPublic, inv.image, inv.imageUrl]);
+
+  // Access management state and mutations
+  const [collabEmail, setCollabEmail] = React.useState(''); // populated from selected user
+  const [collabWrite, setCollabWrite] = React.useState(true);
+  const [userQuery, setUserQuery] = React.useState('');
+  const [userResults, setUserResults] = React.useState([]);
+  const [showUserDropdown, setShowUserDropdown] = React.useState(false);
+  const [selectedUser, setSelectedUser] = React.useState(null);
+
+  // Debounced user search
+  React.useEffect(() => {
+    const q = userQuery.trim();
+    if (!q || q.length < 2) { setUserResults([]); return; }
+    const t = setTimeout(async () => {
+      try {
+        const r = await axios.get(`/api/users/search/autocomplete`, { params: { q } });
+        const raw = Array.isArray(r.data) ? r.data : [];
+        const existing = new Set((inv.accessUsers || []).map(u => u.id));
+        const ownerId = inv?.creator?.id;
+        const filtered = raw.filter(u => u && u.id !== currentUserId && u.id !== ownerId && !existing.has(u.id));
+        setUserResults(filtered);
+        setShowUserDropdown(true);
+      } catch (e) {
+        setUserResults([]);
+      }
+    }, 250);
+    return () => clearTimeout(t);
+  }, [userQuery, currentUserId, inv.accessUsers, inv?.creator?.id]);
+
+  const addAccessMutation = useMutation(
+    async () => {
+      const payload = { userEmail: collabEmail.trim(), canWrite: !!collabWrite };
+      if (!payload.userEmail) throw new Error('Email is required');
+      const r = await axios.post(`/api/inventories/${id}/access`, payload);
+      return r.data;
+    },
+    { onSuccess: () => { setCollabEmail(''); queryClient.invalidateQueries(['inventory', id]); } }
+  );
+
+  const removeAccessMutation = useMutation(
+    async (userId) => {
+      await axios.delete(`/api/inventories/${id}/access/${userId}`);
+      return userId;
+    },
+    { onSuccess: () => { queryClient.invalidateQueries(['inventory', id]); } }
+  );
+
+  // Change permission by removing and re-adding with new canWrite
+  const changeAccessMutation = useMutation(
+    async ({ userId, canWrite }) => {
+      const u = (inv.accessUsers || []).find((x) => x.id === userId);
+      if (!u?.email) throw new Error('User email unavailable to change permission');
+      await axios.delete(`/api/inventories/${id}/access/${userId}`);
+      await axios.post(`/api/inventories/${id}/access`, { userEmail: u.email, canWrite: !!canWrite });
+      return userId;
+    },
+    { onSuccess: () => { queryClient.invalidateQueries(['inventory', id]); } }
+  );
 
   // Custom ID builder state (initialized from inventory)
   const [cidFormat, setCidFormat] = React.useState([]);
@@ -250,13 +420,12 @@ export default function InventoryDetailPage() {
   const defaultVisible = React.useMemo(() => {
     const base = {
       title: true,
-      image: !!imageFieldKey,
       customId: true,
       createdAt: true,
     };
-    for (const f of fieldDefs) base[`cf:${f.key}`] = false; // default hidden
+    for (const f of fixedSlotDefs) base[f.key] = false; // default hidden
     return base;
-  }, [imageFieldKey, fieldDefs]);
+  }, [fixedSlotDefs]);
 
   const [visibleCols, setVisibleCols] = useState(() => {
     try {
@@ -279,52 +448,36 @@ export default function InventoryDetailPage() {
           <Link to={`/items/${it.id}`} className="text-blue-600 dark:text-blue-400 hover:underline">{it.title || it.name || it.customId}</Link>
         ),
       },
-      imageFieldKey && {
-        key: 'image',
-        label: 'Image',
-        className: 'w-20',
-        render: (it) => (
-          it.customFields?.[imageFieldKey] ? (
-            <img
-              src={it.customFields[imageFieldKey]}
-              alt={it.title || it.name || it.customId}
-              className="w-12 h-12 rounded object-cover border border-gray-200 dark:border-gray-700"
-            />
-          ) : (
-            <div className="w-12 h-12 rounded bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-700" />
-          )
-        ),
-      },
       { key: 'customId', label: 'ID', render: (it) => it.customId || it.serial || it.id },
       { key: 'createdAt', label: 'Created', render: (it) => (it.createdAt ? new Date(it.createdAt).toLocaleString() : '') },
-    ].filter(Boolean);
+    ];
 
-    // append custom fields
-    for (const f of fieldDefs) {
-      // If we already show a dedicated thumbnail Image column, skip duplicate file columns likely labeled as Image
-      if (imageFieldKey && f.type === 'file') {
-        const lbl = String(f.label || '').toLowerCase();
-        if (lbl === 'image' || lbl.includes('image')) continue;
-      }
+    for (const f of fixedSlotDefs) {
       base.push({
-        key: `cf:${f.key}`,
+        key: f.key,
         label: f.label,
         render: (it) => {
-          const v = it.customFields?.[f.key];
-          if (v == null) return '';
+          const v = it[f.key];
+          if (v == null || v === '') return '';
           if (f.type === 'boolean') return v ? 'Yes' : 'No';
-          if (f.type === 'file') {
-            return typeof v === 'string' ? (
-              <a href={v} target="_blank" rel="noreferrer" className="text-blue-600 dark:text-blue-400 underline">View</a>
-            ) : '';
+          if (f.type === 'file' && typeof v === 'string') {
+            return (
+              <a href={v} target="_blank" rel="noreferrer" className="inline-block align-middle">
+                <img
+                  src={v}
+                  alt={f.label}
+                  className="w-10 h-10 object-cover rounded border border-gray-200 dark:border-gray-700"
+                  referrerPolicy="no-referrer"
+                />
+              </a>
+            );
           }
-          if (typeof v === 'object') return JSON.stringify(v);
           return String(v);
         },
       });
     }
     return base;
-  }, [fieldDefs, imageFieldKey]);
+  }, [fixedSlotDefs]);
 
   const shownColumns = columns.filter((c) => visibleCols[c.key] !== false);
 
@@ -347,6 +500,7 @@ export default function InventoryDetailPage() {
     );
   }
 
+  // Early return for error state
   if (isError) {
     return (
       <div className="max-w-4xl mx-auto p-6">
@@ -358,32 +512,7 @@ export default function InventoryDetailPage() {
       </div>
     );
   }
-
-  // Selection and toolbar actions
-  const [selected, setSelected] = useState(() => new Set());
-  const isSelected = (id) => selected.has(id);
-  const toggleSelect = (id) => setSelected((s) => {
-    const ns = new Set(s);
-    if (ns.has(id)) ns.delete(id); else ns.add(id);
-    return ns;
-  });
-  const clearSelection = () => setSelected(new Set());
-  const allSelected = items.length > 0 && selected.size === items.length;
-  const toggleSelectAll = () => setSelected((s) => s.size === items.length ? new Set() : new Set(items.map((it) => it.id)));
-
-  // Per-row actions
-  const deleteMutation = useMutation(
-    async (itemId) => {
-      await axios.delete(`/api/items/${itemId}`);
-      return itemId;
-    },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['inventory:items', id]);
-        queryClient.invalidateQueries(['inventory', id]);
-      },
-    }
-  );
+  // (moved above) Selection handlers and deleteMutation
 
   const openFirstSelected = (mode) => {
     const first = Array.from(selected)[0];
@@ -498,20 +627,20 @@ export default function InventoryDetailPage() {
             </div>
           )}
 
-          <div className="mt-8 border-b border-gray-200 dark:border-gray-700">
-            <nav className="-mb-px flex w-full justify-between gap-4 overflow-x-auto" aria-label="Tabs" role="tablist">
-              {TABS.map((t) => (
+          <div className="mt-6 border-b border-gray-200 dark:border-gray-700">
+            <nav className="-mb-px flex justify-center gap-4 overflow-x-auto" aria-label="Tabs" role="tablist">
+              {visibleTabs.map((t) => (
                 <a
                   key={t}
                   href="#"
                   role="tab"
                   aria-selected={activeTab === t}
                   onClick={(e) => { e.preventDefault(); setActiveTab(t); }}
-                  className={`inline-block whitespace-nowrap select-none px-0 pb-2 text-sm font-normal cursor-pointer
-                    appearance-none bg-transparent rounded-none border-0 shadow-none outline-none focus:outline-none focus:ring-0 hover:bg-transparent active:bg-transparent
+                  className={`inline-block whitespace-nowrap select-none px-4 py-2 text-sm font-medium cursor-pointer
+                    appearance-none bg-transparent rounded-none shadow-none outline-none focus:outline-none focus:ring-0 hover:bg-transparent active:bg-transparent border-b-2
                     ${activeTab === t
-                      ? 'border-b-2 border-blue-600 text-gray-900 dark:text-gray-100'
-                      : 'border-b-0 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'}`}
+                      ? 'border-blue-600 text-gray-900 dark:text-gray-100'
+                      : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'}`}
                 >
                   {t}
                 </a>
@@ -528,6 +657,7 @@ export default function InventoryDetailPage() {
                   {columns.map((c) => (
                     <label key={c.key} className="inline-flex items-center gap-2 text-xs text-gray-800 dark:text-gray-200">
                       <input
+// {{ ... }}
                         type="checkbox"
                         checked={visibleCols[c.key] !== false}
                         onChange={(e) => setVisibleCols((v) => ({ ...v, [c.key]: e.target.checked }))}
@@ -690,7 +820,7 @@ export default function InventoryDetailPage() {
               </div>
             </div>
           )}
-          {activeTab === 'Settings' && (
+          {activeTab === 'Settings' && canManageInventory && (
             <div className="mt-6 space-y-3">
               <div>
                 <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">Title</label>
@@ -779,14 +909,29 @@ export default function InventoryDetailPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {['singleLineText','multiLineText','numeric','boolean','documentImage'].map((k)=> (
                   <div key={k}>
-                    <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">{k}</h4>
-                    <ul className="mb-1 list-disc list-inside text-sm text-gray-700 dark:text-gray-300">
+                    <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">{
+                      ({
+                        singleLineText: 'Single line',
+                        multiLineText: 'Multi line',
+                        numeric: 'Numeric',
+                        boolean: 'Boolean',
+                        documentImage: 'Document/Image'
+                      })[k] || k
+                    }</h4>
+                    <ul className="mb-1 space-y-2 text-sm text-gray-700 dark:text-gray-300">
                       {(cfBuilder[k]||[]).map((n,idx)=>(
-                        <li key={`${k}-${idx}`} className="flex items-center justify-between">
-                          <span>{n}</span>
-                          <button type="button" className="text-xs text-red-600" onClick={()=> setCfBuilder((b)=>({ ...b, [k]: b[k].filter((_,i)=>i!==idx) }))}>Remove</button>
+                        <li key={`${k}-${idx}`} className="flex items-center gap-2">
+                          <input
+                            value={n}
+                            onChange={(e)=> setCfBuilder((b)=>{ const arr=[...(b[k]||[])]; arr[idx]=e.target.value; return { ...b, [k]: arr }; })}
+                            className="flex-1 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1"
+                          />
+                          <button type="button" className="text-xs text-red-600" onClick={()=> setCfBuilder((b)=>({ ...b, [k]: (b[k]||[]).filter((_,i)=>i!==idx) }))}>Remove</button>
                         </li>
                       ))}
+                      {((cfBuilder[k]||[]).length === 0) && (
+                        <li className="text-xs text-gray-500 dark:text-gray-400">No fields added</li>
+                      )}
                     </ul>
                   </div>
                 ))}
@@ -808,30 +953,182 @@ export default function InventoryDetailPage() {
             </div>
           )}
 
-          {activeTab === 'Access' && (
-            <div className="mt-6 space-y-3">
-              <label className="inline-flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
-                <input type="checkbox" checked={settingsForm.isPublic} onChange={(e)=>setSettingsForm((f)=>({...f,isPublic:e.target.checked}))} className="h-4 w-4 rounded border-gray-300 dark:border-gray-600" />
-                Public inventory
-              </label>
-              <button type="button" className="px-4 py-2 rounded-md bg-blue-600 text-white disabled:opacity-50" onClick={()=>updateInvMutation.mutate({ isPublic: settingsForm.isPublic })} disabled={updateInvMutation.isLoading}>
-                {updateInvMutation.isLoading ? 'Saving...' : 'Save'}
-              </button>
-              <p className="text-xs text-gray-600 dark:text-gray-400">Collaborators management can be added here when API is available.</p>
+          {activeTab === 'Access' && canManageInventory && (
+            <div className="mt-6 space-y-4">
+              {/* Public toggle */}
+              <div className="flex items-center gap-3">
+                <label className="inline-flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
+                  <input type="checkbox" checked={settingsForm.isPublic} onChange={(e)=>setSettingsForm((f)=>({...f,isPublic:e.target.checked}))} className="h-4 w-4 rounded border-gray-300 dark:border-gray-600" />
+                  Public inventory
+                </label>
+                <button type="button" className="px-3 py-1.5 rounded-md bg-blue-600 text-white disabled:opacity-50" onClick={()=>updateInvMutation.mutate({ isPublic: settingsForm.isPublic })} disabled={updateInvMutation.isLoading}>
+                  {updateInvMutation.isLoading ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+
+              {/* Collaborators list */}
+              <div>
+                <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">Collaborators</h3>
+                <div className="rounded border border-gray-200 dark:border-gray-700 divide-y divide-gray-200 dark:divide-gray-700">
+                  {(inv.accessUsers || []).length === 0 && (
+                    <div className="p-3 text-sm text-gray-600 dark:text-gray-400">No collaborators yet.</div>
+                  )}
+                  {(inv.accessUsers || []).map((u) => {
+                    const canWrite = !!(u?.InventoryAccess?.canWrite);
+                    const name = (u.firstName && u.lastName) ? `${u.firstName} ${u.lastName}` : (u.firstName || u.username || u.email || 'User');
+                    const avatar = u.avatar || '';
+                    return (
+                      <div key={u.id} className="p-3 flex items-center gap-3">
+                        <img src={avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}`} alt={name} className="w-7 h-7 rounded-full object-cover border border-gray-200 dark:border-gray-700" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm text-gray-900 dark:text-gray-100 truncate">{name}</div>
+                          <div className="text-xs text-gray-600 dark:text-gray-400 truncate">{u.email || u.username}</div>
+                        </div>
+                        <span className="text-xs px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">{canWrite ? 'Can edit' : 'Read only'}</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600"
+                            disabled={changeAccessMutation.isLoading || !canManageInventory}
+                            onClick={() => canManageInventory && changeAccessMutation.mutate({ userId: u.id, canWrite: !canWrite })}
+                            title={canWrite ? 'Make read-only' : 'Grant edit'}
+                          >
+                            {canWrite ? 'Make read-only' : 'Grant edit'}
+                          </button>
+                          <button
+                            type="button"
+                            className="px-2 py-1 text-xs rounded border border-red-300 dark:border-red-600 text-red-700 dark:text-red-300"
+                            disabled={removeAccessMutation.isLoading || !canManageInventory}
+                            onClick={() => canManageInventory && removeAccessMutation.mutate(u.id)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Add collaborator (search + select) */}
+              <div>
+                <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">Add collaborator</h4>
+                <div className="flex flex-col gap-2">
+                  <div className="relative">
+                    {!selectedUser ? (
+                      <input
+                        type="text"
+                        placeholder="Search users by name or email"
+                        value={userQuery}
+                        onChange={(e)=>{ setUserQuery(e.target.value); setShowUserDropdown(true); }}
+                        onFocus={()=> setShowUserDropdown(true)}
+                        className="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2"
+                        aria-autocomplete="list"
+                        aria-expanded={showUserDropdown}
+                      />
+                    ) : (
+                      <div className="flex items-center justify-between rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <img src={selectedUser.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent((selectedUser.firstName||'')[0]||selectedUser.username||selectedUser.email)}`} alt={selectedUser.username||selectedUser.email} className="w-6 h-6 rounded-full" />
+                          <div className="truncate text-sm">
+                            <span className="text-gray-900 dark:text-gray-100">{selectedUser.firstName || selectedUser.username || selectedUser.email}</span>
+                            <span className="ml-2 text-gray-600 dark:text-gray-400">{selectedUser.email}</span>
+                          </div>
+                        </div>
+                        <button type="button" className="text-xs text-red-600" onClick={()=>{ setSelectedUser(null); setCollabEmail(''); setUserQuery(''); }}>Clear</button>
+                      </div>
+                    )}
+                    {showUserDropdown && !selectedUser && userResults.length > 0 && (
+                      <ul className="absolute z-10 mt-1 w-full max-h-56 overflow-auto rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow">
+                        {userResults.map(u => (
+                          <li key={u.id} className="px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer flex items-center gap-2"
+                              onClick={() => { setSelectedUser(u); setCollabEmail(u.email || ''); setShowUserDropdown(false); }}>
+                            <img src={u.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent((u.firstName||'')[0]||u.username||u.email)}`} alt={u.username||u.email} className="w-6 h-6 rounded-full" />
+                            <div className="min-w-0">
+                              <div className="truncate text-gray-900 dark:text-gray-100">{(u.firstName && u.lastName) ? `${u.firstName} ${u.lastName}` : (u.firstName || u.username || u.email)}</div>
+                              <div className="truncate text-xs text-gray-600 dark:text-gray-400">{u.email}</div>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="inline-flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
+                      <input type="checkbox" checked={collabWrite} onChange={(e)=>setCollabWrite(e.target.checked)} className="h-4 w-4 rounded border-gray-300 dark:border-gray-600" />
+                      Can edit
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => canManageInventory && addAccessMutation.mutate()}
+                      disabled={!canManageInventory || addAccessMutation.isLoading || !selectedUser || !collabEmail.trim()}
+                      className="ml-auto px-3 py-1.5 rounded bg-blue-600 text-white disabled:opacity-50"
+                    >
+                      {addAccessMutation.isLoading ? 'Adding...' : 'Add'}
+                    </button>
+                  </div>
+                  {addAccessMutation.isError && (
+                    <div className="text-xs text-red-600 dark:text-red-400">{addAccessMutation.error?.response?.data?.message || addAccessMutation.error?.message}</div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
           {activeTab === 'Stats' && (
             <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+              {/* Total items */}
               <div className="p-3 rounded bg-gray-50 dark:bg-gray-900">
                 <div className="text-gray-500 dark:text-gray-400">Items</div>
                 <div className="text-lg text-gray-900 dark:text-gray-100">{itemCount}</div>
               </div>
+
+              {/* Created date */}
               <div className="p-3 rounded bg-gray-50 dark:bg-gray-900">
                 <div className="text-gray-500 dark:text-gray-400">Created</div>
                 <div className="text-lg text-gray-900 dark:text-gray-100">{createdAt}</div>
               </div>
-              {Array.isArray(inv.tags) && (
+
+              {/* Activity sparkline (14 days) */}
+              <div className="p-3 rounded bg-gray-50 dark:bg-gray-900 col-span-2 sm:col-span-1">
+                <div className="flex items-center justify-between">
+                  <div className="text-gray-500 dark:text-gray-400">Last 14 days</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">max {spark.max}</div>
+                </div>
+                <svg viewBox={`0 0 ${spark.w} ${spark.h}`} className="mt-1 w-full h-8">
+                  <path d={spark.d} fill="none" stroke="#3b82f6" strokeWidth="2" />
+                </svg>
+              </div>
+
+              {/* Collaborators */}
+              <div className="p-3 rounded bg-gray-50 dark:bg-gray-900">
+                <div className="text-gray-500 dark:text-gray-400">Collaborators</div>
+                <div className="text-lg text-gray-900 dark:text-gray-100">{Array.isArray(inv.accessUsers) ? inv.accessUsers.length : 0}</div>
+              </div>
+
+              {/* Comments count */}
+              <div className="p-3 rounded bg-gray-50 dark:bg-gray-900">
+                <div className="text-gray-500 dark:text-gray-400">Comments</div>
+                <div className="text-lg text-gray-900 dark:text-gray-100">{Array.isArray(chatData) ? chatData.length : 0}</div>
+              </div>
+
+              {/* Likes (aggregated from item likes) */}
+              <div className="p-3 rounded bg-gray-50 dark:bg-gray-900">
+                <div className="text-gray-500 dark:text-gray-400">Likes</div>
+                <div className="text-lg text-gray-900 dark:text-gray-100">{totalLikes}</div>
+              </div>
+
+              {/* Visibility */}
+              <div className="p-3 rounded bg-gray-50 dark:bg-gray-900">
+                <div className="text-gray-500 dark:text-gray-400">Visibility</div>
+                <div className="text-lg">
+                  <span className={`px-2 py-0.5 rounded text-xs ${inv.isPublic ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200' : 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200'}`}>
+                    {inv.isPublic ? 'Public' : 'Private'}
+                  </span>
+                </div>
+              </div>
+
+              {Array.isArray(inv.tags) && inv.tags.length > 0 && (
                 <div className="p-3 rounded bg-gray-50 dark:bg-gray-900 col-span-2">
                   <div className="text-gray-500 dark:text-gray-400 mb-1">Tags</div>
                   <div className="flex flex-wrap gap-2">
@@ -883,11 +1180,11 @@ export default function InventoryDetailPage() {
                 className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2"
               />
             </div>
-            {fieldDefs.length > 0 && (
+            {fixedSlotDefs.length > 0 && (
               <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {fieldDefs.map((f) => {
-                  const val = newItem.customFields?.[f.key] ?? '';
-                  const setVal = (v) => setNewItem((x) => ({ ...x, customFields: { ...(x.customFields || {}), [f.key]: v } }));
+                {fixedSlotDefs.map((f) => {
+                  const val = newItem[f.key] ?? '';
+                  const setVal = (v) => setNewItem((x) => ({ ...x, [f.key]: v }));
                   if (f.type === 'boolean') {
                     return (
                       <label key={f.key} className="inline-flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
@@ -899,19 +1196,6 @@ export default function InventoryDetailPage() {
                         />
                         {f.label}
                       </label>
-                    );
-                  }
-                  if (f.type === 'text') {
-                    return (
-                      <div key={f.key}>
-                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">{f.label}</label>
-                        <textarea
-                          value={val}
-                          onChange={(e) => setVal(e.target.value)}
-                          rows={3}
-                          className="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2"
-                        />
-                      </div>
                     );
                   }
                   if (f.type === 'number') {
@@ -927,6 +1211,7 @@ export default function InventoryDetailPage() {
                       </div>
                     );
                   }
+                  // file uploader for document/image string slots
                   if (f.type === 'file') {
                     return (
                       <div key={f.key}>
@@ -984,7 +1269,13 @@ export default function InventoryDetailPage() {
             <button
               type="button"
               disabled={!newItem.title || addItemMutation.isLoading}
-              onClick={() => addItemMutation.mutate({ title: newItem.title, description: newItem.description, customFields: newItem.customFields })}
+              onClick={() => {
+                const payload = { title: newItem.title, description: newItem.description };
+                for (const f of fixedSlotDefs) {
+                  if (newItem[f.key] !== undefined) payload[f.key] = newItem[f.key];
+                }
+                addItemMutation.mutate(payload);
+              }}
               className="mt-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white px-4 py-2 rounded-md"
             >
               {addItemMutation.isLoading ? 'Adding...' : 'Add Item'}

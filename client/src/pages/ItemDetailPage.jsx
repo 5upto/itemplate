@@ -27,6 +27,9 @@ export default function ItemDetailPage() {
   );
 
   const item = data || {};
+  const invObj = item.inventory || item.Inventory || {};
+  const inventoryId = item.inventoryId || invObj.id || invObj._id;
+  const inventoryTitle = item.inventoryTitle || invObj.title;
   const serverLikeCount = (() => {
     if (typeof item.likeCount === 'number') return item.likeCount;
     if (Array.isArray(item.likeUsers)) return item.likeUsers.length;
@@ -111,6 +114,12 @@ export default function ItemDetailPage() {
         <span className="mx-2">/</span>
         <Link to="/inventories" className="hover:underline">{t('nav.inventories', { defaultValue: 'Inventories' })}</Link>
         <span className="mx-2">/</span>
+        {inventoryId ? (
+          <>
+            <Link to={`/inventories/${inventoryId}`} className="hover:underline">{inventoryTitle || t('fields.inventory', { defaultValue: 'Inventory' })}</Link>
+            <span className="mx-2">/</span>
+          </>
+        ) : null}
         <span className="text-gray-800 dark:text-gray-100">{item.title || t('item.detail', { defaultValue: 'Item Details' })}</span>
       </nav>
 
@@ -143,18 +152,42 @@ export default function ItemDetailPage() {
         <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
           <Package className="h-4 w-4" />
           <span className="font-medium">{t('fields.inventory', { defaultValue: 'Inventory' })}</span>:
-          <span>{item.inventoryTitle || item.inventory?.title || item.Inventory?.title || '-'}</span>
+          {inventoryId ? (
+            <Link to={`/inventories/${inventoryId}`} className="text-blue-600 dark:text-blue-400 hover:underline">
+              {inventoryTitle || invObj.title || '-'}
+            </Link>
+          ) : (
+            <span>{inventoryTitle || invObj.title || '-'}</span>
+          )}
         </div>
         <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
           <UserIcon className="h-4 w-4" />
           <span className="font-medium">{t('fields.owner', { defaultValue: 'Owner' })}</span>:
-          <span>{
-            item.ownerName ||
-            item.owner?.name ||
-            item.creator?.username ||
-            (item.creator?.firstName || item.creator?.lastName ? `${item.creator?.firstName ?? ''} ${item.creator?.lastName ?? ''}`.trim() : '') ||
-            '-'
-          }</span>
+          {(() => {
+            const creator = item.creator || {};
+            const name = (
+              item.ownerName ||
+              item.owner?.name ||
+              creator.username ||
+              ((creator.firstName || creator.lastName) ? `${creator.firstName ?? ''} ${creator.lastName ?? ''}`.trim() : '')
+            ) || '-';
+            const avatar = creator.avatar || creator.avatarUrl || creator.photo || '';
+            const fallback = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`;
+            return (
+              <span className="inline-flex items-center gap-2">
+                {name !== '-' && (
+                  <img
+                    src={avatar || fallback}
+                    referrerPolicy="no-referrer"
+                    onError={(e) => { e.currentTarget.src = fallback; }}
+                    alt={name}
+                    className="w-6 h-6 rounded-full object-cover border border-gray-200 dark:border-gray-700"
+                  />
+                )}
+                <span>{name}</span>
+              </span>
+            );
+          })()}
         </div>
         <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
           <HashIcon className="h-4 w-4" />
@@ -196,21 +229,66 @@ export default function ItemDetailPage() {
         </div>
       )}
 
-      {item.customFields && (
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">{t('fields.customFields', { defaultValue: 'Custom Fields' })}</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {Object.entries(item.customFields).map(([key, val]) => (
-              <div key={key} className="text-sm text-gray-700 dark:text-gray-300">
-                <span className="font-medium">{key}</span>: {String(val)}
-              </div>
-            ))}
+      {(() => {
+        // Build displayable fields from fixed slots and inventory template names
+        const inv = item.inventory || item.Inventory || {};
+        const isUrl = (s) => typeof s === 'string' && /^(https?:)?\/\//i.test(s);
+        const isImageUrl = (s) => typeof s === 'string' && /(\.(png|jpe?g|gif|webp|bmp|svg|ico)$)|((cloudinary|images|img)\.)/i.test(s);
+        const rows = [];
+        const pushIf = (state, label, value, type) => {
+          if (!state) return;
+          const hasVal = value !== undefined && value !== null && value !== '';
+          if (!hasVal) return;
+          rows.push({ label: label || '', value, type });
+        };
+        pushIf(inv.custom_string1_state, inv.custom_string1_name, item.string1, 'string');
+        pushIf(inv.custom_string2_state, inv.custom_string2_name, item.string2, 'string');
+        pushIf(inv.custom_string3_state, inv.custom_string3_name, item.string3, 'string');
+        pushIf(inv.custom_int1_state, inv.custom_int1_name, item.int1, 'number');
+        pushIf(inv.custom_int2_state, inv.custom_int2_name, item.int2, 'number');
+        pushIf(inv.custom_int3_state, inv.custom_int3_name, item.int3, 'number');
+        pushIf(inv.custom_bool1_state, inv.custom_bool1_name, item.bool1, 'boolean');
+        pushIf(inv.custom_bool2_state, inv.custom_bool2_name, item.bool2, 'boolean');
+        pushIf(inv.custom_bool3_state, inv.custom_bool3_name, item.bool3, 'boolean');
+        if (rows.length === 0) return null;
+        return (
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">{t('fields.customFields', { defaultValue: 'Custom Fields' })}</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {rows.map((r, idx) => (
+                <div key={idx} className="text-sm text-gray-700 dark:text-gray-300">
+                  <span className="font-medium">{r.label || t('fields.value', { defaultValue: 'Value' })}</span>:{' '}
+                  {r.type === 'boolean' ? (
+                    r.value ? 'Yes' : 'No'
+                  ) : (typeof r.value === 'string' && isUrl(r.value)) ? (
+                    isImageUrl(r.value) ? (
+                      <a href={r.value} target="_blank" rel="noreferrer" className="inline-block align-middle">
+                        <img
+                          src={r.value}
+                          alt={r.label}
+                          className="w-14 h-14 object-cover rounded border border-gray-200 dark:border-gray-700"
+                          referrerPolicy="no-referrer"
+                        />
+                      </a>
+                    ) : (
+                      <a href={r.value} target="_blank" rel="noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline break-all">{r.value}</a>
+                    )
+                  ) : (
+                    String(r.value)
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       <div className="flex items-center gap-4">
-        <Link to="/inventories" className="text-blue-600 dark:text-blue-400 hover:underline">{t('nav.inventories', { defaultValue: 'Inventories' })}</Link>
+        {inventoryId ? (
+          <Link to={`/inventories/${inventoryId}`} className="text-blue-600 dark:text-blue-400 hover:underline">{t('nav.backToInventory', { defaultValue: 'Back to Inventory' })}</Link>
+        ) : (
+          <Link to="/inventories" className="text-blue-600 dark:text-blue-400 hover:underline">{t('nav.inventories', { defaultValue: 'Inventories' })}</Link>
+        )}
         <Link to="/" className="text-blue-600 dark:text-blue-400 hover:underline">{t('nav.home', { defaultValue: 'Home' })}</Link>
       </div>
     </div>

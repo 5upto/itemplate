@@ -18,6 +18,63 @@ const tryAuth = (req, res, next) => {
   })(req, res, next);
 };
 
+// Map JSON customFields payload into the fixed-slot columns using the
+// current inventory customFields definition. We keep it simple:
+// - String slots take values from singleLineText then multiLineText (order preserved)
+// - Integer slots take from numeric
+// - Boolean slots take from boolean
+// - documentImage is ignored for slots (remains in JSON)
+// Only the first 3 values per type are stored due to available slots.
+const mapCustomFieldsToSlots = (inventoryCF = {}, payloadCF = {}) => {
+  const strings = [];
+  const nums = [];
+  const bools = [];
+
+  const invSL = Array.isArray(inventoryCF.singleLineText) ? inventoryCF.singleLineText : [];
+  const invML = Array.isArray(inventoryCF.multiLineText) ? inventoryCF.multiLineText : [];
+  const invNum = Array.isArray(inventoryCF.numeric) ? inventoryCF.numeric : [];
+  const invBool = Array.isArray(inventoryCF.boolean) ? inventoryCF.boolean : [];
+
+  const paySL = payloadCF?.singleLineText || {};
+  const payML = payloadCF?.multiLineText || {};
+  const payNum = payloadCF?.numeric || {};
+  const payBool = payloadCF?.boolean || {};
+
+  // Collect strings in stable order by index within each type list
+  invSL.forEach((name, idx) => {
+    if (strings.length < 3) strings.push(
+      paySL[name] ?? paySL[idx] ?? payloadCF[name] ?? payloadCF[idx] ?? null
+    );
+  });
+  invML.forEach((name, idx) => {
+    if (strings.length < 3) strings.push(
+      payML[name] ?? payML[idx] ?? payloadCF[name] ?? payloadCF[idx] ?? null
+    );
+  });
+  invNum.forEach((name, idx) => {
+    if (nums.length < 3) nums.push(
+      payNum[name] ?? payNum[idx] ?? payloadCF[name] ?? payloadCF[idx] ?? null
+    );
+  });
+  invBool.forEach((name, idx) => {
+    if (bools.length < 3) bools.push(
+      payBool[name] ?? payBool[idx] ?? payloadCF[name] ?? payloadCF[idx] ?? null
+    );
+  });
+
+  const out = {};
+  if (strings[0] !== undefined) out.string1 = strings[0];
+  if (strings[1] !== undefined) out.string2 = strings[1];
+  if (strings[2] !== undefined) out.string3 = strings[2];
+  if (nums[0] !== undefined) out.int1 = (nums[0] === '' || nums[0] === null) ? null : Number(nums[0]);
+  if (nums[1] !== undefined) out.int2 = (nums[1] === '' || nums[1] === null) ? null : Number(nums[1]);
+  if (nums[2] !== undefined) out.int3 = (nums[2] === '' || nums[2] === null) ? null : Number(nums[2]);
+  if (bools[0] !== undefined) out.bool1 = typeof bools[0] === 'boolean' ? bools[0] : !!bools[0];
+  if (bools[1] !== undefined) out.bool2 = typeof bools[1] === 'boolean' ? bools[1] : !!bools[1];
+  if (bools[2] !== undefined) out.bool3 = typeof bools[2] === 'boolean' ? bools[2] : !!bools[2];
+  return out;
+};
+
 // Cloudinary configuration for item images
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -143,7 +200,11 @@ router.get('/inventory/:inventoryId', tryAuth, async (req, res) => {
     if (search) {
       whereClause[Op.or] = [
         { customId: { [Op.iLike]: `%${search}%` } },
-        { 'customFields': { [Op.contains]: { [Op.any]: [`%${search}%`] } } }
+        { title: { [Op.iLike]: `%${search}%` } },
+        { description: { [Op.iLike]: `%${search}%` } },
+        { string1: { [Op.iLike]: `%${search}%` } },
+        { string2: { [Op.iLike]: `%${search}%` } },
+        { string3: { [Op.iLike]: `%${search}%` } }
       ];
     }
     
@@ -189,7 +250,22 @@ router.get('/:id', tryAuth, async (req, res) => {
     const item = await Item.findByPk(req.params.id, {
       include: [
         { model: User, as: 'creator', attributes: ['id', 'username', 'firstName', 'lastName', 'avatar'] },
-        { model: Inventory, attributes: ['id', 'title', 'customFields'] },
+        { 
+          model: Inventory, 
+          attributes: [
+            'id', 'title', 'customFields',
+            // fixed template fields for labeling
+            'custom_string1_state','custom_string1_name',
+            'custom_string2_state','custom_string2_name',
+            'custom_string3_state','custom_string3_name',
+            'custom_int1_state','custom_int1_name',
+            'custom_int2_state','custom_int2_name',
+            'custom_int3_state','custom_int3_name',
+            'custom_bool1_state','custom_bool1_name',
+            'custom_bool2_state','custom_bool2_name',
+            'custom_bool3_state','custom_bool3_name'
+          ]
+        },
         { 
           model: User, 
           as: 'likeUsers', 
@@ -224,8 +300,11 @@ router.post('/',
   async (req, res) => {
     try {
       const { inventoryId, customFields, title, description } = req.body;
+      // Fixed-slot answers (optional)
+      const { string1, string2, string3, int1, int2, int3, bool1, bool2, bool3 } = req.body;
       
       // Get current item count for sequence generation
+      
       const itemCount = await Item.count({ where: { inventoryId } });
       
       // Generate custom ID
@@ -240,14 +319,35 @@ router.post('/',
         return res.status(400).json({ message: 'Custom ID already exists. Please try again.' });
       }
       
-      const item = await Item.create({
+      const createData = {
         inventoryId,
         customId,
         title: title || null,
         description: description || null,
-        customFields: customFields || {},
         createdBy: req.user.id
-      });
+      };
+      // If JSON customFields provided, map them to fixed slots using current inventory definition
+      if (customFields && typeof customFields === 'object') {
+        const slotVals = mapCustomFieldsToSlots(req.inventory.customFields, customFields);
+        // Only set if not explicitly provided in body
+        ['string1','string2','string3','int1','int2','int3','bool1','bool2','bool3'].forEach((k)=>{
+          if (typeof createData[k] === 'undefined' && typeof slotVals[k] !== 'undefined') {
+            createData[k] = slotVals[k];
+          }
+        });
+      }
+      // Only set provided slot fields (keep nulls untouched by not including undefined)
+      if (typeof string1 !== 'undefined') createData.string1 = string1;
+      if (typeof string2 !== 'undefined') createData.string2 = string2;
+      if (typeof string3 !== 'undefined') createData.string3 = string3;
+      if (typeof int1 !== 'undefined') createData.int1 = int1;
+      if (typeof int2 !== 'undefined') createData.int2 = int2;
+      if (typeof int3 !== 'undefined') createData.int3 = int3;
+      if (typeof bool1 !== 'undefined') createData.bool1 = bool1;
+      if (typeof bool2 !== 'undefined') createData.bool2 = bool2;
+      if (typeof bool3 !== 'undefined') createData.bool3 = bool3;
+
+      const item = await Item.create(createData);
       
       // Fetch complete item with associations
       const createdItem = await Item.findByPk(item.id, {
@@ -310,6 +410,7 @@ router.put('/:id',
       }
       
       const { customId, customFields, title, description } = req.body;
+      const { string1, string2, string3, int1, int2, int3, bool1, bool2, bool3 } = req.body;
       
       // Validate custom ID format if changed
       if (customId && customId !== item.customId) {
@@ -326,13 +427,32 @@ router.put('/:id',
         }
       }
       
-      await item.update({
+      const updateData = {
         customId: customId || item.customId,
         title: typeof title !== 'undefined' ? title : item.title,
         description: typeof description !== 'undefined' ? description : item.description,
-        customFields: customFields || item.customFields,
         version: item.version + 1
-      });
+      };
+      // If JSON customFields provided, map them to fixed slots using current inventory definition
+      if (customFields && typeof customFields === 'object') {
+        const slotVals = mapCustomFieldsToSlots(item.Inventory?.customFields || {}, customFields);
+        ['string1','string2','string3','int1','int2','int3','bool1','bool2','bool3'].forEach((k)=>{
+          if (typeof updateData[k] === 'undefined' && typeof slotVals[k] !== 'undefined') {
+            updateData[k] = slotVals[k];
+          }
+        });
+      }
+      if (typeof string1 !== 'undefined') updateData.string1 = string1;
+      if (typeof string2 !== 'undefined') updateData.string2 = string2;
+      if (typeof string3 !== 'undefined') updateData.string3 = string3;
+      if (typeof int1 !== 'undefined') updateData.int1 = int1;
+      if (typeof int2 !== 'undefined') updateData.int2 = int2;
+      if (typeof int3 !== 'undefined') updateData.int3 = int3;
+      if (typeof bool1 !== 'undefined') updateData.bool1 = bool1;
+      if (typeof bool2 !== 'undefined') updateData.bool2 = bool2;
+      if (typeof bool3 !== 'undefined') updateData.bool3 = bool3;
+
+      await item.update(updateData);
       
       // Fetch updated item with associations
       const updatedItem = await Item.findByPk(item.id, {

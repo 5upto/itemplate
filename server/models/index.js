@@ -52,6 +52,28 @@ const Inventory = sequelize.define('Inventory', {
       boolean: []
     }
   },
+  // Fixed slot template fields (simple implementation)
+  // Strings
+  custom_string1_state: { type: DataTypes.BOOLEAN, defaultValue: false },
+  custom_string1_name: { type: DataTypes.STRING, allowNull: true },
+  custom_string2_state: { type: DataTypes.BOOLEAN, defaultValue: false },
+  custom_string2_name: { type: DataTypes.STRING, allowNull: true },
+  custom_string3_state: { type: DataTypes.BOOLEAN, defaultValue: false },
+  custom_string3_name: { type: DataTypes.STRING, allowNull: true },
+  // Integers
+  custom_int1_state: { type: DataTypes.BOOLEAN, defaultValue: false },
+  custom_int1_name: { type: DataTypes.STRING, allowNull: true },
+  custom_int2_state: { type: DataTypes.BOOLEAN, defaultValue: false },
+  custom_int2_name: { type: DataTypes.STRING, allowNull: true },
+  custom_int3_state: { type: DataTypes.BOOLEAN, defaultValue: false },
+  custom_int3_name: { type: DataTypes.STRING, allowNull: true },
+  // Booleans
+  custom_bool1_state: { type: DataTypes.BOOLEAN, defaultValue: false },
+  custom_bool1_name: { type: DataTypes.STRING, allowNull: true },
+  custom_bool2_state: { type: DataTypes.BOOLEAN, defaultValue: false },
+  custom_bool2_name: { type: DataTypes.STRING, allowNull: true },
+  custom_bool3_state: { type: DataTypes.BOOLEAN, defaultValue: false },
+  custom_bool3_name: { type: DataTypes.STRING, allowNull: true },
   version: { type: DataTypes.INTEGER, defaultValue: 1 }
 });
 
@@ -68,6 +90,16 @@ const Item = sequelize.define('Item', {
   description: { type: DataTypes.TEXT, allowNull: true },
   customFields: { type: DataTypes.JSONB, defaultValue: {} },
   likes: { type: DataTypes.INTEGER, defaultValue: 0 },
+  // Fixed slot answer fields
+  string1: { type: DataTypes.STRING, allowNull: true },
+  string2: { type: DataTypes.STRING, allowNull: true },
+  string3: { type: DataTypes.STRING, allowNull: true },
+  int1: { type: DataTypes.INTEGER, allowNull: true },
+  int2: { type: DataTypes.INTEGER, allowNull: true },
+  int3: { type: DataTypes.INTEGER, allowNull: true },
+  bool1: { type: DataTypes.BOOLEAN, allowNull: true },
+  bool2: { type: DataTypes.BOOLEAN, allowNull: true },
+  bool3: { type: DataTypes.BOOLEAN, allowNull: true },
   version: { type: DataTypes.INTEGER, defaultValue: 1 }
 }, {
   indexes: [

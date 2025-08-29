@@ -6,7 +6,22 @@ export default function InventoryCard({ inventory, showItemCount = false }) {
   if (!inventory) return null;
   const { id, name, title, description, itemCount, image, imageUrl, cover, coverImage } = inventory;
   const displayTitle = name || title;
-  const coverSrc = image || imageUrl || coverImage || cover || null;
+  // Handle different possible image source fields and ensure the URL is complete
+  const getImageUrl = (img) => {
+    if (!img) return null;
+    // If it's already a full URL or data URL, return as is
+    if (typeof img === 'string' && (img.startsWith('http') || img.startsWith('data:'))) {
+      return img;
+    }
+    // If it's an object with a URL property (common in some API responses)
+    if (img && typeof img === 'object' && img.url) {
+      return img.url.startsWith('http') ? img.url : `${process.env.REACT_APP_API_URL || ''}${img.url}`;
+    }
+    // If it's just a path, prepend the API URL if needed
+    return img.startsWith('/') ? `${process.env.REACT_APP_API_URL || ''}${img}` : img;
+  };
+
+  const coverSrc = getImageUrl(image) || getImageUrl(imageUrl) || getImageUrl(coverImage) || getImageUrl(cover) || null;
 
   return (
     <Link
@@ -15,11 +30,22 @@ export default function InventoryCard({ inventory, showItemCount = false }) {
     >
       <div className="flex items-start gap-4">
         {coverSrc ? (
-          <img
-            src={coverSrc}
-            alt={displayTitle}
-            className="shrink-0 w-16 h-16 rounded object-cover border border-gray-200 dark:border-gray-700"
-          />
+          <div className="relative shrink-0 w-16 h-16 rounded overflow-hidden border border-gray-200 dark:border-gray-700">
+            <img
+              src={coverSrc}
+              alt={displayTitle}
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.style.display = 'none';
+                e.target.parentElement.innerHTML = `
+                  <div class="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-700">
+                    <Package className="h-6 w-6 text-gray-400" />
+                  </div>
+                `;
+              }}
+            />
+          </div>
         ) : (
           <div className="shrink-0 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
             <Package className="h-6 w-6" />
