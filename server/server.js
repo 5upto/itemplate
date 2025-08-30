@@ -23,10 +23,12 @@ const tagRoutes = require('./routes/tags');
 
 const app = express();
 const server = createServer(app);
+const CLIENT_ORIGIN = process.env.CLIENT_URL || 'http://localhost:5173';
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL || "http://localhost:3000",
-    methods: ["GET", "POST"]
+    origin: CLIENT_ORIGIN,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: true
   }
 });
 
@@ -46,7 +48,7 @@ const limiter = rateLimit({
 app.use(limiter);
 
 app.use(cors({
-  origin: process.env.CLIENT_URL || "http://localhost:3000",
+  origin: CLIENT_ORIGIN,
   credentials: true
 }));
 

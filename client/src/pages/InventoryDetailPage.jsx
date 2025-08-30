@@ -3,8 +3,9 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import axios from 'axios';
 import { getItemsListRequest, createItemRequest, canListItems, canCreateItems } from '../api/endpoints';
-import { Calendar, Package, Tag, Eye, Pencil, Trash } from 'lucide-react';
+import { Calendar, Package, Tag, Eye, Pencil, Trash, Check, X } from 'lucide-react';
 import LoadingSpinner from '../components/UI/LoadingSpinner';
+import { io } from 'socket.io-client';
 
 // Local helper to mirror server-side custom ID generation for preview purposes
 // Supported element types:
@@ -87,6 +88,10 @@ export default function InventoryDetailPage() {
   });
   const [submitErr, setSubmitErr] = useState('');
   const [selected, setSelected] = useState(() => new Set());
+  const socketRef = React.useRef(null);
+  const [unread, setUnread] = useState(0);
+  const [editingId, setEditingId] = useState(null);
+  const [editText, setEditText] = useState('');
   
   // Data fetching
   const { data, isLoading, isError, error } = useQuery(
@@ -171,6 +176,10 @@ export default function InventoryDetailPage() {
   React.useEffect(() => {
     if (!visibleTabs.includes(activeTab)) setActiveTab(visibleTabs[0] || 'Items');
   }, [visibleTabs, activeTab]);
+
+  React.useEffect(() => {
+    if (activeTab === 'Chat') setUnread(0);
+  }, [activeTab]);
 
   const addItemReq = async (payload) => {
     if (!canCreateItems()) throw new Error('Item creation endpoint is not configured');
@@ -306,6 +315,7 @@ export default function InventoryDetailPage() {
 
   // Settings state (title/description/isPublic/imageUrl)
   const [settingsForm, setSettingsForm] = React.useState({ title: '', description: '', isPublic: true, imageUrl: '' });
+  const [coverFileKey, setCoverFileKey] = React.useState(0);
   React.useEffect(() => {
     setSettingsForm({
       title: inv.title || '',
@@ -414,6 +424,79 @@ export default function InventoryDetailPage() {
     },
     { onSuccess: () => { setMessage(''); refetchChat(); } }
   );
+
+  const deleteCommentMutation = useMutation(
+    async (commentId) => {
+      await axios.delete(`/api/comments/${commentId}`);
+    },
+    {
+      onSuccess: () => {
+        // Socket will remove from cache; no local action needed
+      }
+    }
+  );
+
+  const updateCommentMutation = useMutation(
+    async ({ id: commentId, content }) => {
+      const r = await axios.put(`/api/comments/${commentId}`, { content });
+      return r.data;
+    },
+    {
+      onSuccess: () => {
+        setEditingId(null);
+        setEditText('');
+      }
+    }
+  );
+
+  // Socket.IO realtime updates for chat
+  const SOCKET_URL = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_SERVER_URL)
+    ? import.meta.env.VITE_SERVER_URL
+    : (typeof window !== 'undefined' && window.location ? (import.meta?.env?.MODE === 'development' ? 'http://localhost:5000' : window.location.origin) : '');
+  React.useEffect(() => {
+    if (!id) return;
+    if (!socketRef.current) {
+      try {
+        socketRef.current = io(SOCKET_URL || '/', { withCredentials: true, transports: ['websocket', 'polling'] });
+      } catch (e) {
+        // no-op
+      }
+    }
+    const s = socketRef.current;
+    if (!s) return;
+
+    const join = () => { try { s.emit('join-inventory', id); } catch {} };
+    if (s.connected) join();
+    s.on('connect', join);
+
+    const onAdded = (c) => {
+      queryClient.setQueryData(['inventory:chat', id], (prev = []) => {
+        const exists = prev.some((x) => x.id === c.id);
+        return exists ? prev : [...prev, c];
+      });
+      if (activeTab !== 'Chat' && c?.author?.id !== currentUserId) {
+        setUnread((u) => u + 1);
+      }
+    };
+    const onUpdated = (c) => {
+      queryClient.setQueryData(['inventory:chat', id], (prev = []) => prev.map((x) => (x.id === c.id ? c : x)));
+    };
+    const onDeleted = ({ id: cid }) => {
+      queryClient.setQueryData(['inventory:chat', id], (prev = []) => prev.filter((x) => x.id !== cid));
+    };
+
+    s.on('commentAdded', onAdded);
+    s.on('commentUpdated', onUpdated);
+    s.on('commentDeleted', onDeleted);
+
+    return () => {
+      try { s.emit('leave-inventory', id); } catch {}
+      s.off('connect', join);
+      s.off('commentAdded', onAdded);
+      s.off('commentUpdated', onUpdated);
+      s.off('commentDeleted', onDeleted);
+    };
+  }, [id, queryClient, activeTab, currentUserId]);
 
   // Column visibility (persist per-inventory)
   const storageKey = `inv:${id}:visibleCols`;
@@ -642,7 +725,14 @@ export default function InventoryDetailPage() {
                       ? 'border-blue-600 text-gray-900 dark:text-gray-100'
                       : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'}`}
                 >
-                  {t}
+                  {t === 'Chat' ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span>Chat</span>
+                      {unread > 0 && (
+                        <span className="ml-1 inline-flex items-center justify-center text-xs px-1.5 min-w-5 h-5 rounded-full bg-red-600 text-white">{unread}</span>
+                      )}
+                    </span>
+                  ) : t}
                 </a>
               ))}
             </nav>
@@ -657,7 +747,6 @@ export default function InventoryDetailPage() {
                   {columns.map((c) => (
                     <label key={c.key} className="inline-flex items-center gap-2 text-xs text-gray-800 dark:text-gray-200">
                       <input
-// {{ ... }}
                         type="checkbox"
                         checked={visibleCols[c.key] !== false}
                         onChange={(e) => setVisibleCols((v) => ({ ...v, [c.key]: e.target.checked }))}
@@ -672,7 +761,7 @@ export default function InventoryDetailPage() {
               {embeddedItems === null && canListItems() && itemsLoading ? (
                 <LoadingSpinner />
               ) : items.length === 0 ? (
-                <p className="text-sm text-gray-600 dark:text-gray-300">No items yet.</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">No items yet.</p>
               ) : (
                 <div className="overflow-x-auto">
                   {/* Selection toolbar with icon-only actions */}
@@ -704,7 +793,7 @@ export default function InventoryDetailPage() {
                         type="button"
                         onClick={() => openFirstSelected('edit')}
                         disabled={selected.size === 0}
-                        className="p-2 rounded-md bg-blue-600 text-white disabled:opacity-50 hover:bg-blue-700"
+                        className="p-2 rounded-md bg-blue-600 text-white disabled:opacity-50"
                         title="Edit selected"
                         aria-label="Edit selected"
                       >
@@ -714,7 +803,7 @@ export default function InventoryDetailPage() {
                         type="button"
                         onClick={deleteSelected}
                         disabled={selected.size === 0}
-                        className="p-2 rounded-md bg-red-600 text-white disabled:opacity-50 hover:bg-red-700"
+                        className="p-2 rounded-md bg-red-600 text-white disabled:opacity-50"
                         title="Delete selected"
                         aria-label="Delete selected"
                       >
@@ -783,19 +872,87 @@ export default function InventoryDetailPage() {
               <div className="space-y-3 max-h-72 overflow-auto bg-gray-50 dark:bg-gray-900 p-3 rounded">
                 {(chatData || []).map((c, i) => (
                   <div key={c.id || i} className="text-sm">
-                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-                      <span className="font-medium text-gray-800 dark:text-gray-200">
-                        {(() => {
-                          const a = c.author || {};
-                          const fn = a.firstName || '';
-                          const ln = a.lastName || '';
-                          const full = fn && ln ? `${fn} ${ln}` : (fn || a.username || 'User');
-                          return full;
-                        })()}
-                      </span>
-                      <span className="text-xs">{c.createdAt ? new Date(c.createdAt).toLocaleString() : ''}</span>
+                    <div className="flex items-start gap-3">
+                      <img
+                        src={(c.author?.avatar) || `https://ui-avatars.com/api/?name=${encodeURIComponent(((c.author?.firstName||'') + ' ' + (c.author?.lastName||'')).trim() || c.author?.username || 'User')}&background=random`}
+                        referrerPolicy="no-referrer"
+                        alt={c.author?.username || 'User'}
+                        className="w-7 h-7 rounded-full object-cover border border-gray-200 dark:border-gray-700"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                          <span className="font-medium text-gray-800 dark:text-gray-200">
+                            {(() => {
+                              const a = c.author || {};
+                              const fn = a.firstName || '';
+                              const ln = a.lastName || '';
+                              const full = fn && ln ? `${fn} ${ln}` : (fn || a.username || 'User');
+                              return full;
+                            })()}
+                          </span>
+                          <span className="text-xs">{c.createdAt ? new Date(c.createdAt).toLocaleString() : ''}</span>
+                          {((c.author?.id === currentUserId) || !!(typeof isAdmin !== 'undefined' && isAdmin)) && (
+                            <span className="ml-auto inline-flex items-center gap-1.5">
+                              {editingId === c.id ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => { const val = editText.trim(); if (!val) return; updateCommentMutation.mutate({ id: c.id, content: val }); }}
+                                    disabled={updateCommentMutation.isLoading}
+                                    className="p-1.5 rounded bg-blue-600 text-white disabled:opacity-50"
+                                    title={updateCommentMutation.isLoading ? 'Saving...' : 'Save'}
+                                    aria-label="Save comment"
+                                  >
+                                    <Check size={14} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => { setEditingId(null); setEditText(''); }}
+                                    className="p-1.5 rounded border border-gray-300 dark:border-gray-600"
+                                    title="Cancel"
+                                    aria-label="Cancel edit"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => { setEditingId(c.id); setEditText(c.content || ''); }}
+                                    className="p-1.5 rounded border border-gray-300 dark:border-gray-600"
+                                    title="Edit"
+                                    aria-label="Edit comment"
+                                  >
+                                    <Pencil size={14} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => { if (confirm('Delete this comment?')) deleteCommentMutation.mutate(c.id); }}
+                                    disabled={deleteCommentMutation.isLoading}
+                                    className="p-1.5 rounded border border-red-300 text-red-700 dark:border-red-600 dark:text-red-300 disabled:opacity-50"
+                                    title={deleteCommentMutation.isLoading ? 'Deleting...' : 'Delete'}
+                                    aria-label="Delete comment"
+                                  >
+                                    <Trash size={14} />
+                                  </button>
+                                </>
+                              )}
+                            </span>
+                          )}
+                        </div>
+                        {editingId === c.id ? (
+                          <textarea
+                            rows={2}
+                            value={editText}
+                            onChange={(e) => setEditText(e.target.value)}
+                            className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2"
+                          />
+                        ) : (
+                          <div className="text-gray-800 dark:text-gray-100">{c.content || ''}</div>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-gray-800 dark:text-gray-100">{c.content || ''}</div>
                   </div>
                 ))}
                 {(chatData || []).length === 0 && (
@@ -820,6 +977,127 @@ export default function InventoryDetailPage() {
               </div>
             </div>
           )}
+          {activeTab === 'Settings' && canManageInventory && false && (
+            <div className="mt-6 space-y-4">
+              {/* Public toggle */}
+              <div className="flex items-center gap-3">
+                <label className="inline-flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
+                  <input type="checkbox" checked={settingsForm.isPublic} onChange={(e)=>setSettingsForm((f)=>({...f,isPublic:e.target.checked}))} className="h-4 w-4 rounded border-gray-300 dark:border-gray-600" />
+                  Public inventory
+                </label>
+                <button type="button" className="px-3 py-1.5 rounded-md bg-blue-600 text-white disabled:opacity-50" onClick={()=>updateInvMutation.mutate({ isPublic: settingsForm.isPublic })} disabled={updateInvMutation.isLoading}>
+                  {updateInvMutation.isLoading ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+
+              {/* Collaborators list */}
+              <div>
+                <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">Collaborators</h3>
+                <div className="rounded border border-gray-200 dark:border-gray-700 divide-y divide-gray-200 dark:divide-gray-700">
+                  {(inv.accessUsers || []).length === 0 && (
+                    <div className="p-3 text-sm text-gray-600 dark:text-gray-400">No collaborators yet.</div>
+                  )}
+                  {(inv.accessUsers || []).map((u) => {
+                    const canWrite = !!(u?.InventoryAccess?.canWrite);
+                    const name = (u.firstName && u.lastName) ? `${u.firstName} ${u.lastName}` : (u.firstName || u.username || u.email || 'User');
+                    const avatar = u.avatar || '';
+                    return (
+                      <div key={u.id} className="p-3 flex items-center gap-3">
+                        <img src={avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}`} alt={name} className="w-7 h-7 rounded-full object-cover border border-gray-200 dark:border-gray-700" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm text-gray-900 dark:text-gray-100 truncate">{name}</div>
+                          <div className="text-xs text-gray-600 dark:text-gray-400 truncate">{u.email || u.username}</div>
+                        </div>
+                        <span className="text-xs px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">{canWrite ? 'Can edit' : 'Read only'}</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600"
+                            disabled={changeAccessMutation.isLoading || !canManageInventory}
+                            onClick={() => canManageInventory && changeAccessMutation.mutate({ userId: u.id, canWrite: !canWrite })}
+                            title={canWrite ? 'Make read-only' : 'Grant edit'}
+                          >
+                            {canWrite ? 'Make read-only' : 'Grant edit'}
+                          </button>
+                          <button
+                            type="button"
+                            className="px-2 py-1 text-xs rounded border border-red-300 dark:border-red-600 text-red-700 dark:text-red-300"
+                            disabled={removeAccessMutation.isLoading || !canManageInventory}
+                            onClick={() => canManageInventory && removeAccessMutation.mutate(u.id)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Add collaborator (search + select) */}
+              <div>
+                <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">Add collaborator</h4>
+                <div className="flex flex-col gap-2">
+                  <div className="relative">
+                    {!selectedUser ? (
+                      <input
+                        type="text"
+                        placeholder="Search users by name or email"
+                        value={userQuery}
+                        onChange={(e)=>{ setUserQuery(e.target.value); setShowUserDropdown(true); }}
+                        onFocus={()=> setShowUserDropdown(true)}
+                        className="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2"
+                        aria-autocomplete="list"
+                        aria-expanded={showUserDropdown}
+                      />
+                    ) : (
+                      <div className="flex items-center justify-between rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <img src={selectedUser.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent((selectedUser.firstName||'')[0]||selectedUser.username||selectedUser.email)}`} alt={selectedUser.username||selectedUser.email} className="w-6 h-6 rounded-full" />
+                          <div className="truncate text-sm">
+                            <span className="text-gray-900 dark:text-gray-100">{selectedUser.firstName || selectedUser.username || selectedUser.email}</span>
+                            <span className="ml-2 text-gray-600 dark:text-gray-400">{selectedUser.email}</span>
+                          </div>
+                        </div>
+                        <button type="button" className="text-xs text-red-600" onClick={()=>{ setSelectedUser(null); setCollabEmail(''); setUserQuery(''); }}>Clear</button>
+                      </div>
+                    )}
+                    {showUserDropdown && !selectedUser && userResults.length > 0 && (
+                      <ul className="absolute z-10 mt-1 w-full max-h-56 overflow-auto rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow">
+                        {userResults.map(u => (
+                          <li key={u.id} className="px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer flex items-center gap-2"
+                              onClick={() => { setSelectedUser(u); setCollabEmail(u.email || ''); setShowUserDropdown(false); }}>
+                            <img src={u.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent((u.firstName||'')[0]||u.username||u.email)}`} alt={u.username||u.email} className="w-6 h-6 rounded-full" />
+                            <div className="min-w-0">
+                              <div className="truncate text-gray-900 dark:text-gray-100">{(u.firstName && u.lastName) ? `${u.firstName} ${u.lastName}` : (u.firstName || u.username || u.email)}</div>
+                              <div className="truncate text-xs text-gray-600 dark:text-gray-400">{u.email}</div>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="inline-flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
+                      <input type="checkbox" checked={collabWrite} onChange={(e)=>setCollabWrite(e.target.checked)} className="h-4 w-4 rounded border-gray-300 dark:border-gray-600" />
+                      Can edit
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => canManageInventory && addAccessMutation.mutate()}
+                      disabled={!canManageInventory || addAccessMutation.isLoading || !selectedUser || !collabEmail.trim()}
+                      className="ml-auto px-3 py-1.5 rounded bg-blue-600 text-white disabled:opacity-50"
+                    >
+                      {addAccessMutation.isLoading ? 'Adding...' : 'Add'}
+                    </button>
+                  </div>
+                  {addAccessMutation.isError && (
+                    <div className="text-xs text-red-600 dark:text-red-400">{addAccessMutation.error?.response?.data?.message || addAccessMutation.error?.message}</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
           {activeTab === 'Settings' && canManageInventory && (
             <div className="mt-6 space-y-3">
               <div>
@@ -835,12 +1113,34 @@ export default function InventoryDetailPage() {
                 Public inventory
               </label>
               <div>
-                <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">Cover image URL</label>
-                <input value={settingsForm.imageUrl} onChange={(e)=>setSettingsForm((f)=>({...f,imageUrl:e.target.value}))} className="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2" />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">Upload cover</label>
-                <input type="file" accept="image/*" onChange={async (e)=>{ const file=e.target.files?.[0]; if(!file) return; try{ const url=await uploadInventoryCover(file); setSettingsForm((f)=>({...f,imageUrl:url})); }catch(err){ alert(err?.response?.data?.message||err.message||'Upload failed'); } }} />
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cover Image (optional)</label>
+                {settingsForm.imageUrl && (
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="relative">
+                      <img src={settingsForm.imageUrl} alt="cover" className="w-20 h-20 object-cover rounded border border-gray-200 dark:border-gray-700" />
+                      <span
+                        onClick={() => { setSettingsForm((f)=>({ ...f, imageUrl: '' })); setCoverFileKey((k)=>k+1); }}
+                        title="Remove"
+                        aria-label="Remove"
+                        className="absolute -top-1 -right-1 cursor-pointer select-none text-white text-sm leading-none"
+                      >
+                        ×
+                      </span>
+                    </div>
+                    <a href={settingsForm.imageUrl} target="_blank" rel="noreferrer" className="text-blue-600 dark:text-blue-400 underline">View</a>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      key={`cover-${coverFileKey}`}
+                      onChange={async (e) => { const file = e.target.files?.[0] || null; if (!file) return; try { const url = await uploadInventoryCover(file); setSettingsForm((f)=>({ ...f, imageUrl: url })); } catch (err) { alert(err?.response?.data?.message || err.message || 'Upload failed'); } }}
+                      className="block w-full text-sm text-gray-900 dark:text-gray-100 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                    />
+                  </div>
+                </div>
               </div>
               <button
                 type="button"
