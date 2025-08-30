@@ -492,7 +492,7 @@ export default function InventoryDetailPage() {
   // Socket.IO realtime updates for chat
   const SOCKET_URL = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_SERVER_URL)
     ? import.meta.env.VITE_SERVER_URL
-    : (typeof window !== 'undefined' && window.location ? (import.meta?.env?.MODE === 'development' ? 'http://localhost:5000' : window.location.origin) : '');
+    : (typeof window !== 'undefined' && window.location ? (import.meta?.env?.MODE === 'development' ? 'https://itemplate.onrender.com' : 'https://itemplate.onrender.com') : '');
   React.useEffect(() => {
     if (!id) return;
     if (!socketRef.current) {

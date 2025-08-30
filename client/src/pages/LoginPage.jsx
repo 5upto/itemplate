@@ -5,7 +5,7 @@ import { toast } from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function LoginPage() {
-  const serverUrl = import.meta.env.VITE_SERVER_URL || window.location.origin;
+  const serverUrl = import.meta.env.VITE_SERVER_URL || 'https://itemplate.onrender.com';
   const { login } = useAuth();
   const navigate = useNavigate();
 

@@ -83,7 +83,7 @@ const Navbar = () => {
             {user && (
               <Link
                 to="/inventories/create"
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-md transition-colors"
+                className="flex items-center gap-2 text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md transition-colors"
                 title="Create Inventory"
               >
                 <Plus className="h-4 w-4" />
@@ -91,8 +91,11 @@ const Navbar = () => {
               </Link>
             )}
 
-            {/* Language Selector */}
-            <LanguageSelector />
+            <Link
+              className="flex items-center gap-2 text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md transition-colors"
+            >
+              <LanguageSelector />
+            </Link>
 
             {user ? (
               <div className="relative" ref={userMenuRef}>
@@ -213,16 +216,18 @@ const Navbar = () => {
               {user && (
                 <Link
                   to="/inventories/create"
-                  className="block px-3 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+                  className="block px-3 py-2 text-white hover:bg-gray-100 rounded-md transition-colors"
                   onClick={() => setIsMenuOpen(false)}
                 >
                   Create
                 </Link>
               )}
 
-              <div className="px-3 py-2">
+              <Link
+                className="block px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+                >
                 <LanguageSelector />
-              </div>
+              </Link>
 
               {user ? (
                 <>
@@ -246,13 +251,13 @@ const Navbar = () => {
                     </Link>
                   )}
 
-                  <button
+                  <Link
                     onClick={handleLogout}
                     className="flex items-center w-full px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
                   >
                     <LogOut className="h-4 w-4 mr-3" />
                     {t('nav.logout')}
-                  </button>
+                  </Link>
                 </>
               ) : (
                 <Link
