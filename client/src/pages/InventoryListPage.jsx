@@ -1,17 +1,25 @@
-import React, { useState } from 'react';
-import { useQuery } from 'react-query';
+import React, { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from 'react-query';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ChevronLeft, ChevronRight, Eye, Plus, Pencil, Trash2 } from 'lucide-react';
 import LoadingSpinner from '../components/UI/LoadingSpinner';
+import DeleteModal from '../components/UI/DeleteModal';
+import { useSocket } from '../contexts/SocketContext';
 
 export default function InventoryListPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { socket } = useSocket();
   const [page, setPage] = useState(1);
   const [limit] = useState(12);
   const [selected, setSelected] = useState([]);
+  const [deletingId, setDeletingId] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [pendingDeleteIds, setPendingDeleteIds] = useState([]);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const { data, isLoading, isError, error, refetch } = useQuery(
     ['inventories:list', page, limit],
@@ -23,38 +31,55 @@ export default function InventoryListPage() {
     }
   );
 
-  const [deletingId, setDeletingId] = useState(null);
+  // Realtime: invalidate list queries when inventories change anywhere
+  useEffect(() => {
+    if (!socket) return;
+    const invalidateLists = () => {
+      try {
+        queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'inventories:list' });
+      } catch {}
+    };
+    socket.on('inventoryCreated', invalidateLists);
+    socket.on('inventoryUpdated', invalidateLists);
+    socket.on('inventoryDeleted', invalidateLists);
+    return () => {
+      socket.off('inventoryCreated', invalidateLists);
+      socket.off('inventoryUpdated', invalidateLists);
+      socket.off('inventoryDeleted', invalidateLists);
+    };
+  }, [socket, queryClient]);
 
-  const onDelete = async (id) => {
+  const onDelete = (id) => {
+    setPendingDeleteIds([id]);
+    setShowDeleteModal(true);
+  };
+
+  const deleteSelected = () => {
+    if (selected.length === 0) return;
+    setPendingDeleteIds([...selected]);
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (pendingDeleteIds.length === 0) return;
     try {
-      // eslint-disable-next-line no-alert
-      const ok = window.confirm(t('inventory.confirmDelete') || 'Delete this inventory?');
-      if (!ok) return;
-      setDeletingId(id);
-      await axios.delete(`/api/inventories/${id}`);
+      setIsDeleting(true);
+      // single delete shows spinner on row button
+      if (pendingDeleteIds.length === 1) setDeletingId(pendingDeleteIds[0]);
+      for (const id of pendingDeleteIds) {
+        await axios.delete(`/api/inventories/${id}`);
+      }
       await refetch();
+      // if bulk, clear selection
+      if (pendingDeleteIds.length > 1) setSelected([]);
     } catch (e) {
       // eslint-disable-next-line no-alert
       alert(e?.response?.data?.message || e.message || 'Failed to delete');
     } finally {
+      setIsDeleting(false);
       setDeletingId(null);
-    }
-  };
-
-  const deleteSelected = async () => {
-    if (selected.length === 0) return;
-    // eslint-disable-next-line no-alert
-    const ok = window.confirm(t('inventory.confirmDelete') || 'Delete selected inventories?');
-    if (!ok) return;
-    try {
-      for (const id of selected) {
-        await axios.delete(`/api/inventories/${id}`);
-      }
-      await refetch();
-      setSelected([]);
-    } catch (e) {
-      // eslint-disable-next-line no-alert
-      alert(e?.response?.data?.message || e.message || 'Failed to delete');
+      setPendingDeleteIds([]);
+      setShowDeleteModal(false);
     }
   };
 
@@ -68,9 +93,9 @@ export default function InventoryListPage() {
 
   if (isError) {
     return (
-      <div className="max-w-3xl mx-auto p-6 bg-white dark:bg-gray-800 rounded-lg shadow border border-red-200 dark:border-red-800">
-        <h1 className="text-xl font-semibold mb-2 text-gray-900 dark:text-gray-100">Failed to load inventories</h1>
-        <p className="text-sm text-red-700 dark:text-red-300">{error?.message || 'Unknown error'}</p>
+      <div className="max-w-3xl mx-auto p-6 bg-white rounded-lg shadow border border-red-200">
+        <h1 className="text-xl font-semibold mb-2 text-gray-900">Failed to load inventories</h1>
+        <p className="text-sm text-red-700">{error?.message || 'Unknown error'}</p>
       </div>
     );
   }
@@ -98,17 +123,17 @@ export default function InventoryListPage() {
   return (
     <div className="max-w-7xl mx-auto p-6">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{t('nav.inventories')}</h1>
+        <h1 className="text-3xl font-bold text-gray-900">{t('nav.inventories')}</h1>
 
         {/* Toolbar actions with icons (no per-row buttons) */}
         <div className="flex items-center gap-2">
           {selected.length > 0 && (
-            <span className="mr-2 text-sm text-gray-600 dark:text-gray-300">
+            <span className="mr-2 text-sm text-gray-600">
               {t('inventory.selectedItems', { count: selected.length })}
             </span>
           )}
           <button
-            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             onClick={() => selected[0] && navigate(`/inventories/${selected[0]}`)}
             disabled={selected.length !== 1}
             title={t('common.view')}
@@ -117,7 +142,7 @@ export default function InventoryListPage() {
             <span className="hidden sm:inline">{t('common.view')}</span>
           </button>
           <button
-            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             onClick={() => selected[0] && navigate(`/inventories/${selected[0]}/items/new`)}
             disabled={selected.length !== 1}
             title={t('inventory.addItem')}
@@ -126,7 +151,7 @@ export default function InventoryListPage() {
             <span className="hidden sm:inline">{t('inventory.addItem')}</span>
           </button>
           <button
-            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             onClick={() => selected[0] && navigate(`/inventories/${selected[0]}/edit`)}
             disabled={selected.length !== 1}
             title={t('common.edit')}
@@ -135,7 +160,7 @@ export default function InventoryListPage() {
             <span className="hidden sm:inline">{t('common.edit')}</span>
           </button>
           <button
-            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md border border-red-200 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
             onClick={deleteSelected}
             disabled={selected.length === 0}
             title={t('common.delete')}
@@ -146,44 +171,44 @@ export default function InventoryListPage() {
         </div>
       </div>
 
-      <div className="overflow-x-auto bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700">
-        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-          <thead className="bg-gray-50 dark:bg-gray-900/40">
+      <div className="overflow-x-auto bg-white rounded-lg shadow border border-gray-200">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
             <tr>
               <th className="w-10 px-4 py-3">
                 <input
                   type="checkbox"
-                  className="h-4 w-4 rounded border-gray-300 dark:border-gray-600"
+                  className="h-4 w-4 rounded border-gray-300"
                   checked={allSelected}
                   onChange={toggleAll}
                   aria-label={t('common.select')}
                 />
               </th>
-              <th className="w-16 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+              <th className="w-16 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">
                 {t('common.image') || 'Image'}
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">
                 {t('inventory.customId')}
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">
                 {t('fields.title')}
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">
                 {t('common.createdBy')}
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">
                 {t('inventory.items')}
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">
                 {t('common.createdAt')}
               </th>
               {/* No actions column */}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+          <tbody className="divide-y divide-gray-200">
             {inventories.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-gray-600 dark:text-gray-300">
+                <td colSpan={6} className="px-4 py-6 text-center text-gray-600">
                   {t('search.noResults')}
                 </td>
               </tr>
@@ -196,13 +221,13 @@ export default function InventoryListPage() {
                 return (
                   <tr
                     key={inv.id}
-                    className="hover:bg-gray-50 dark:hover:bg-gray-700/40 cursor-pointer"
+                    className="hover:bg-gray-50 cursor-pointer"
                     onClick={() => navigate(`/inventories/${inv.id}`)}
                   >
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
-                        className="h-4 w-4 rounded border-gray-300 dark:border-gray-600"
+                        className="h-4 w-4 rounded border-gray-300"
                         checked={selected.includes(inv.id)}
                         onChange={() => toggleOne(inv.id)}
                         aria-label={t('common.select')}
@@ -210,18 +235,18 @@ export default function InventoryListPage() {
                     </td>
                     <td className="px-4 py-3">
                       {cover ? (
-                        <img src={cover} alt={inv.name || inv.title} className="w-12 h-12 rounded object-cover border border-gray-200 dark:border-gray-700" />
+                        <img src={cover} alt={inv.name || inv.title} className="w-12 h-12 rounded object-cover border border-gray-200" />
                       ) : (
-                        <div className="w-12 h-12 rounded bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-700" />
+                        <div className="w-12 h-12 rounded bg-gray-100 border border-gray-200" />
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{displayId}</td>
-                    <td className="px-4 py-3 text-sm text-blue-700 dark:text-blue-400">
+                    <td className="px-4 py-3 text-sm text-gray-900">{displayId}</td>
+                    <td className="px-4 py-3 text-sm text-blue-700">
                       <span className="underline decoration-dotted">{inv.name || inv.title}</span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{owner}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{inv.itemCount ?? inv.itemsCount ?? 0}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{createdAt}</td>
+                    <td className="px-4 py-3 text-sm text-gray-700">{owner}</td>
+                    <td className="px-4 py-3 text-sm text-gray-700">{inv.itemCount ?? inv.itemsCount ?? 0}</td>
+                    <td className="px-4 py-3 text-sm text-gray-700">{createdAt}</td>
                   </tr>
                 );
               })
@@ -234,18 +259,18 @@ export default function InventoryListPage() {
       {totalPages && totalPages > 1 && (
         <div className="mt-4 flex items-center justify-end gap-2">
           <button
-            className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+            className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50"
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
           >
             <ChevronLeft className="h-4 w-4" />
             {t('common.previous')}
           </button>
-          <span className="text-sm text-gray-600 dark:text-gray-300">
+          <span className="text-sm text-gray-600">
             {page} / {totalPages}
           </span>
           <button
-            className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+            className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50"
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
           >
@@ -254,6 +279,16 @@ export default function InventoryListPage() {
           </button>
         </div>
       )}
+      <DeleteModal
+        open={showDeleteModal}
+        title={t('common.delete')}
+        description={pendingDeleteIds.length > 1
+          ? t('messages.confirmDelete') || `Delete ${pendingDeleteIds.length} selected inventories?`
+          : t('inventory.confirmDelete') || 'Delete this inventory?'}
+        isLoading={isDeleting}
+        onConfirm={handleConfirmDelete}
+        onClose={() => { if (!isDeleting) { setShowDeleteModal(false); setPendingDeleteIds([]); } }}
+      />
     </div>
   );
 }

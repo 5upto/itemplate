@@ -259,48 +259,48 @@ export default function CreateInventoryPage() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
-      <h1 className="text-2xl font-semibold mb-6 text-gray-900 dark:text-gray-100">{t('inventory.create')}</h1>
+    <div className="max-w-2xl mx-auto p-6 bg-white rounded-lg shadow">
+      <h1 className="text-2xl font-semibold mb-6 text-gray-900">{t('inventory.create')}</h1>
       {error && (
-        <div className="mb-4 text-red-600 dark:text-red-400" role="alert">{error}</div>
+        <div className="mb-4 text-red-600" role="alert">{error}</div>
       )}
       <form onSubmit={onSubmit} className="space-y-6">
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('fields.title')}</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{t('fields.title')}</label>
           <input
             name="title"
             value={form.title}
             onChange={onChange}
             required
-            className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full rounded-md border border-gray-300 bg-white text-gray-900 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
           <textarea
             name="description"
             value={form.description}
             onChange={onChange}
             rows={4}
-            className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full rounded-md border border-gray-300 bg-white text-gray-900 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category ID (optional)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Category ID (optional)</label>
           <input
             name="categoryId"
             value={form.categoryId}
             onChange={onChange}
-            className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full rounded-md border border-gray-300 bg-white text-gray-900 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
         <div ref={tagDropdownRef} className="relative">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tags</label>
-          <div className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1 flex flex-wrap items-center gap-1 focus-within:ring-2 focus-within:ring-blue-500">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Tags</label>
+          <div className="w-full rounded-md border border-gray-300 bg-white px-2 py-1 flex flex-wrap items-center gap-1 focus-within:ring-2 focus-within:ring-blue-500">
             {selectedTags.map((tag, idx) => (
-              <span key={`${tag}-${idx}`} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-gray-100 dark:bg-gray-600 text-xs text-gray-800 dark:text-gray-100">
+              <span key={`${tag}-${idx}`} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-gray-100 text-xs text-gray-800">
                 {tag}
-                <button type="button" className="text-gray-500 hover:text-red-600" onClick={() => removeTag(idx)}>×</button>
+                <button type="button" className="text-red-600 hover:text-red-700" onClick={() => removeTag(idx)}>×</button>
               </span>
             ))}
             <input
@@ -308,17 +308,17 @@ export default function CreateInventoryPage() {
               onChange={(e) => { setTagQuery(e.target.value); setShowTagDropdown(true); }}
               onKeyDown={onTagKeyDown}
               placeholder="e.g. books, tech"
-              className="flex-1 min-w-[8rem] bg-transparent outline-none text-sm text-gray-900 dark:text-gray-100 px-1 py-1"
+              className="flex-1 min-w-[8rem] bg-transparent outline-none text-sm text-gray-900 px-1 py-1"
             />
           </div>
           {showTagDropdown && tagOptions.length > 0 && (
-            <ul className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow max-h-48 overflow-auto">
+            <ul className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow max-h-48 overflow-auto">
               {tagOptions.map((opt) => {
                 const val = opt.name || opt;
                 return (
                   <li
                     key={val}
-                    className="px-3 py-2 text-sm text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
+                    className="px-3 py-2 text-sm text-gray-800 hover:bg-gray-100 cursor-pointer"
                     onClick={() => addTag(val)}
                   >
                     {val}
@@ -335,30 +335,30 @@ export default function CreateInventoryPage() {
             name="isPublic"
             checked={form.isPublic}
             onChange={onChange}
-            className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
           />
-          <label htmlFor="isPublic" className="text-sm text-gray-700 dark:text-gray-300">{t('access.public')}</label>
+          <label htmlFor="isPublic" className="text-sm text-gray-700">{t('access.public')}</label>
         </div>
 
         {/* Custom ID Builder */}
-        <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Custom ID</h2>
+        <div className="border-t border-gray-200 pt-4">
+          <h2 className="text-lg font-semibold text-gray-900 mb-2">Custom ID</h2>
           {customIdFormat.length > 0 && (
-            <div className="mb-2 text-sm text-gray-700 dark:text-gray-300">
+            <div className="mb-2 text-sm text-gray-700">
               Example: <span className="font-mono">{previewCustomId(customIdFormat)}</span>
             </div>
           )}
           <div className="space-y-2">
             {customIdFormat.map((el, idx) => (
               <div key={idx} className="flex items-center gap-2">
-                <span className="w-32 text-xs uppercase text-gray-500 dark:text-gray-400">{el.type}</span>
+                <span className="w-32 text-xs uppercase text-gray-500">{el.type}</span>
                 {el.type === 'text' || el.type === 'fixed' ? (
                   <input
                     value={el.value || ''}
                     onChange={(e) => {
                       const next = [...customIdFormat]; next[idx] = { ...el, value: e.target.value }; setCustomIdFormat(next);
                     }}
-                    className="flex-1 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1"
+                    className="flex-1 rounded-md border border-gray-300 bg-white text-gray-900 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 ) : el.type === 'sequence' ? (
                   <input
@@ -368,7 +368,7 @@ export default function CreateInventoryPage() {
                     onChange={(e) => {
                       const next = [...customIdFormat]; next[idx] = { ...el, padding: Number(e.target.value || 0) }; setCustomIdFormat(next);
                     }}
-                    className="w-24 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1"
+                    className="w-24 rounded-md border border-gray-300 bg-white text-gray-900 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 ) : el.type === 'datetime' ? (
                   <input
@@ -377,17 +377,17 @@ export default function CreateInventoryPage() {
                       const next = [...customIdFormat]; next[idx] = { ...el, format: e.target.value }; setCustomIdFormat(next);
                     }}
                     placeholder="YYYYMMDD or YYYY-MM-DD"
-                    className="flex-1 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1"
+                    className="flex-1 rounded-md border border-gray-300 bg-white text-gray-900 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 ) : (
-                  <div className="text-xs text-gray-500 dark:text-gray-400">auto</div>
+                  <div className="text-xs text-gray-500">auto</div>
                 )}
                 <div className="flex items-center gap-1">
-                  <button type="button" className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600" disabled={idx===0}
+                  <button type="button" className="px-2 py-1 text-xs rounded border border-gray-300" disabled={idx===0}
                     onClick={() => { const next=[...customIdFormat]; [next[idx-1],next[idx]]=[next[idx],next[idx-1]]; setCustomIdFormat(next); }}>↑</button>
-                  <button type="button" className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600" disabled={idx===customIdFormat.length-1}
+                  <button type="button" className="px-2 py-1 text-xs rounded border border-gray-300" disabled={idx===customIdFormat.length-1}
                     onClick={() => { const next=[...customIdFormat]; [next[idx+1],next[idx]]=[next[idx],next[idx+1]]; setCustomIdFormat(next); }}>↓</button>
-                  <button type="button" className="px-2 py-1 text-xs rounded border border-red-300 dark:border-red-600 text-red-700 dark:text-red-300"
+                  <button type="button" className="px-2 py-1 text-xs rounded border border-red-300 text-red-700"
                     onClick={() => setCustomIdFormat(customIdFormat.filter((_,i)=>i!==idx))}>Remove</button>
                 </div>
               </div>
@@ -395,7 +395,7 @@ export default function CreateInventoryPage() {
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <select value={newIdElType} onChange={(e)=>setNewIdElType(e.target.value)}
-              className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1">
+              className="rounded-md border border-gray-300 bg-white text-gray-900 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500">
               <option value="text">Fixed</option>
               <option value="random20">20-bit random (X5)</option>
               <option value="random32">32-bit random (X8)</option>
@@ -407,17 +407,17 @@ export default function CreateInventoryPage() {
             </select>
             {(newIdElType === 'text') && (
               <input value={newIdElValue} onChange={(e)=>setNewIdElValue(e.target.value)} placeholder="e.g. INV_"
-                     className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1" />
+                     className="rounded-md border border-gray-300 bg-white text-gray-900 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500" />
             )}
             {newIdElType === 'sequence' && (
               <input type="number" min={0} value={newIdElPadding} onChange={(e)=>setNewIdElPadding(Number(e.target.value||0))}
-                     className="w-28 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1" />
+                     className="w-28 rounded-md border border-gray-300 bg-white text-gray-900 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500" />
             )}
             {newIdElType === 'datetime' && (
               <input value={newIdElDatetimeFmt} onChange={(e)=>setNewIdElDatetimeFmt(e.target.value)} placeholder="YYYYMMDD"
-                     className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1" />
+                     className="rounded-md border border-gray-300 bg-white text-gray-900 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500" />
             )}
-            <button type="button" className="px-3 py-1.5 rounded bg-gray-200 dark:bg-gray-700 text-sm"
+            <button type="button" className="px-3 py-1.5 rounded bg-blue-600 text-white text-sm hover:bg-blue-700"
               onClick={() => {
                 const el = (() => {
                   if (newIdElType === 'text') return { type: 'text', value: newIdElValue };
@@ -432,18 +432,18 @@ export default function CreateInventoryPage() {
         </div>
 
         {/* Custom Fields Builder */}
-        <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Custom fields</h2>
+        <div className="border-t border-gray-200 pt-4">
+          <h2 className="text-lg font-semibold text-gray-900 mb-2">Custom fields</h2>
           <div className="space-y-1 mb-2">
             {['singleLineText','multiLineText','numeric','boolean','documentImage'].map((group) => (
               Array.isArray(customFields[group]) && customFields[group].length > 0 ? (
                 <div key={group}>
-                  <div className="text-xs uppercase text-gray-500 dark:text-gray-400 mb-1">{group}</div>
+                  <div className="text-xs uppercase text-gray-500 mb-1">{group}</div>
                   <div className="flex flex-wrap gap-2">
                     {customFields[group].map((name, i) => (
-                      <span key={`${group}-${name}-${i}`} className="inline-flex items-center gap-2 px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-xs text-gray-800 dark:text-gray-100">
+                      <span key={`${group}-${name}-${i}`} className="inline-flex items-center gap-2 px-2 py-1 rounded bg-gray-100 text-xs text-gray-800">
                         {name}
-                        <button type="button" className="text-red-600 dark:text-red-400"
+                        <button type="button" className="text-red-600 hover:text-red-700"
                           onClick={() => setCustomFields((cf) => ({ ...cf, [group]: cf[group].filter((n, idx) => !(idx===i)) }))}>×</button>
                       </span>
                     ))}
@@ -454,7 +454,7 @@ export default function CreateInventoryPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <select value={newFieldType} onChange={(e)=>setNewFieldType(e.target.value)}
-                    className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1">
+                    className="rounded-md border border-gray-300 bg-white text-gray-900 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500">
               <option value="singleLineText">Single line text</option>
               <option value="multiLineText">Multi line text</option>
               <option value="numeric">Number</option>
@@ -466,11 +466,11 @@ export default function CreateInventoryPage() {
               onChange={(e)=>setNewFieldName(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomField(); } }}
               placeholder="Field name"
-              className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1"
+              className="rounded-md border border-gray-300 bg-white text-gray-900 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <button
               type="button"
-              className="px-3 py-1.5 rounded bg-gray-200 dark:bg-gray-700 text-sm disabled:opacity-60"
+              className="px-3 py-1.5 rounded bg-blue-600 text-white text-sm hover:bg-blue-700 disabled:opacity-60"
               disabled={!newFieldName.trim()}
               onClick={addCustomField}
             >
@@ -480,11 +480,11 @@ export default function CreateInventoryPage() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cover Image (optional)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Cover Image (optional)</label>
           {previewUrl && (
             <div className="flex items-center gap-3 mb-2">
               <div className="relative">
-                <img src={previewUrl} alt="cover" className="w-20 h-20 object-cover rounded border border-gray-200 dark:border-gray-700" />
+                <img src={previewUrl} alt="cover" className="w-20 h-20 object-cover rounded border border-gray-200" />
                 <span
                   onClick={() => { setForm((f)=>({ ...f, imageUrl: '' })); setImageFile(null); setCoverFileKey((k)=>k+1); }}
                   title="Remove"
@@ -494,7 +494,7 @@ export default function CreateInventoryPage() {
                   ×
                 </span>
               </div>
-              <a href={previewUrl} target="_blank" rel="noreferrer" className="text-blue-600 dark:text-blue-400 underline">View</a>
+              <a href={previewUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline">View</a>
             </div>
           )}
           <div className="space-y-2">
@@ -504,7 +504,7 @@ export default function CreateInventoryPage() {
                 accept="image/*"
                 key={`cover-${coverFileKey}`}
                 onChange={(e) => onSelectImage(e.target.files?.[0] || null)}
-                className="block w-full text-sm text-gray-900 dark:text-gray-100 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                className="block w-full text-sm text-gray-900 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
               />
             </div>
           </div>

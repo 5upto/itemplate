@@ -1,15 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Search, 
-  User, 
-  LogOut, 
-  Settings, 
-  Moon, 
-  Sun, 
-  Menu, 
+import {
+  Search,
+  User,
+  LogOut,
+  Settings,
+  Menu,
   X,
   Package,
   Shield,
@@ -17,16 +15,15 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '../../contexts/AuthContext';
-import { useTheme } from '../../contexts/ThemeContext';
 import SearchBar from '../Search/SearchBar';
 import LanguageSelector from '../UI/LanguageSelector';
 
 const Navbar = () => {
   const { t } = useTranslation();
   const { user, logout, isAdmin } = useAuth();
-  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
-  
+  const userMenuRef = useRef(null);
+
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
 
@@ -42,14 +39,28 @@ const Navbar = () => {
     exit: { opacity: 0, y: -10 }
   };
 
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+        setShowUserMenu(false);
+      }
+    };
+  
+    document.addEventListener('mousedown', handleClickOutside);
+  
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   return (
-    <nav className="sticky top-0 z-50 bg-white dark:bg-gray-800 shadow-lg border-b border-gray-200 dark:border-gray-700 transition-colors duration-200">
+    <nav className="sticky top-0 z-50 bg-white shadow-lg border-b border-gray-200 transition-colors duration-200">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link 
-            to="/" 
-            className="flex items-center space-x-2 text-xl font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+          <Link
+            to="/"
+            className="flex items-center space-x-2 text-xl font-bold text-blue-600 hover:text-blue-700 transition-colors"
           >
             <Package className="h-8 w-8" />
             <span className="hidden sm:block">{t('inventory.title')}</span>
@@ -62,9 +73,9 @@ const Navbar = () => {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-4">
-            <Link 
-              to="/inventories" 
-              className="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 px-3 py-2 rounded-md transition-colors"
+            <Link
+              to="/inventories"
+              className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md transition-colors"
             >
               {t('nav.inventories')}
             </Link>
@@ -80,42 +91,39 @@ const Navbar = () => {
               </Link>
             )}
 
-            {/* Theme Toggle */}
-            <button
-              onClick={toggleTheme}
-              className="p-2 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-              title={t('nav.toggleTheme')}
-            >
-              {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-            </button>
-
             {/* Language Selector */}
             <LanguageSelector />
 
             {user ? (
-              <div className="relative">
-                <button
+              <div className="relative" ref={userMenuRef}>
+                <span
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setShowUserMenu(!showUserMenu)}
-                  className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      setShowUserMenu(!showUserMenu);
+                      e.preventDefault();
+                    }
+                  }}
+                  className="flex items-center p-2 rounded-full hover:bg-gray-100 cursor-pointer transition-colors"
                 >
                   {user.avatar ? (
-                    <img 
+                    <img
                       src={user.avatar}
                       referrerPolicy="no-referrer"
                       onError={(e) => {
                         const name = encodeURIComponent(user.firstName || user.username || 'User');
                         e.currentTarget.src = `https://ui-avatars.com/api/?name=${name}&background=random`;
-                      }} 
+                      }}
                       alt={user.username}
                       className="h-8 w-8 rounded-full"
                     />
                   ) : (
-                    <User className="h-8 w-8 p-1 bg-gray-300 dark:bg-gray-600 rounded-full" />
+                    <User className="h-8 w-8 p-1 bg-gray-300 rounded-full" />
                   )}
-                  <span className="text-gray-700 dark:text-gray-300 font-medium">
-                    {user.firstName || user.username}
-                  </span>
-                </button>
+                </span>
+
 
                 <AnimatePresence>
                   {showUserMenu && (
@@ -124,37 +132,37 @@ const Navbar = () => {
                       initial="hidden"
                       animate="visible"
                       exit="exit"
-                      className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 py-1"
+                      className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1"
                     >
                       <Link
                         to="/profile"
-                        className="flex items-center px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                        className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-100 transition-colors"
                         onClick={() => setShowUserMenu(false)}
                       >
                         <User className="h-4 w-4 mr-3" />
                         {t('nav.profile')}
                       </Link>
-                      
+
                       {isAdmin && (
                         <Link
                           to="/admin"
-                          className="flex items-center px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                          className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-100 transition-colors"
                           onClick={() => setShowUserMenu(false)}
                         >
                           <Shield className="h-4 w-4 mr-3" />
                           {t('nav.admin')}
                         </Link>
                       )}
-                      
-                      <hr className="my-1 border-gray-200 dark:border-gray-700" />
-                      
-                      <button
+
+                      <hr className="my-1 border-gray-200" />
+
+                      <Link
                         onClick={handleLogout}
-                        className="flex items-center w-full px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                        className="flex items-center w-full px-4 py-2 text-gray-700 hover:bg-gray-100 transition-colors"
                       >
                         <LogOut className="h-4 w-4 mr-3" />
                         {t('nav.logout')}
-                      </button>
+                      </Link>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -172,7 +180,7 @@ const Navbar = () => {
           {/* Mobile menu button */}
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="md:hidden p-2 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            className="md:hidden p-2 rounded-md text-gray-700 hover:bg-gray-100 transition-colors"
           >
             {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </button>
@@ -191,12 +199,12 @@ const Navbar = () => {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="md:hidden bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 overflow-hidden"
+            className="md:hidden bg-white border-t border-gray-200 overflow-hidden"
           >
             <div className="px-4 py-2 space-y-2">
               <Link
                 to="/inventories"
-                className="block px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                className="block px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
                 onClick={() => setIsMenuOpen(false)}
               >
                 {t('nav.inventories')}
@@ -212,16 +220,6 @@ const Navbar = () => {
                 </Link>
               )}
 
-              <div className="flex items-center justify-between px-3 py-2">
-                <span className="text-gray-700 dark:text-gray-300">{t('nav.theme')}</span>
-                <button
-                  onClick={toggleTheme}
-                  className="p-2 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                >
-                  {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-                </button>
-              </div>
-
               <div className="px-3 py-2">
                 <LanguageSelector />
               </div>
@@ -230,27 +228,27 @@ const Navbar = () => {
                 <>
                   <Link
                     to="/profile"
-                    className="flex items-center px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    className="flex items-center px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     <User className="h-4 w-4 mr-3" />
                     {t('nav.profile')}
                   </Link>
-                  
+
                   {isAdmin && (
                     <Link
                       to="/admin"
-                      className="flex items-center px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                      className="flex items-center px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
                       onClick={() => setIsMenuOpen(false)}
                     >
                       <Shield className="h-4 w-4 mr-3" />
                       {t('nav.admin')}
                     </Link>
                   )}
-                  
+
                   <button
                     onClick={handleLogout}
-                    className="flex items-center w-full px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    className="flex items-center w-full px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
                   >
                     <LogOut className="h-4 w-4 mr-3" />
                     {t('nav.logout')}

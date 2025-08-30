@@ -12,7 +12,7 @@ const LoadingSpinner = ({ size = 'md', className = '' }) => {
   return (
     <div className={`flex justify-center items-center ${className}`}>
       <motion.div
-        className={`${sizeClasses[size]} border-4 border-gray-200 border-t-blue-600 rounded-full dark:border-gray-700 dark:border-t-blue-400`}
+        className={`${sizeClasses[size]} border-4 border-gray-200 border-t-blue-600 rounded-full`}
         animate={{ rotate: 360 }}
         transition={{
           duration: 1,

@@ -402,6 +402,9 @@ router.post('/',
         ]
       });
       
+      // Realtime: broadcast created inventory
+      try { req.app.get('io').emit('inventoryCreated', createdInventory); } catch {}
+      
       res.status(201).json(createdInventory);
     } catch (error) {
       console.error('Error creating inventory:', error);
@@ -535,6 +538,9 @@ router.put('/:id',
         ]
       });
       
+      // Realtime: broadcast updated inventory
+      try { req.app.get('io').emit('inventoryUpdated', updatedInventory); } catch {}
+      
       res.json(updatedInventory);
     } catch (error) {
       console.error('Error updating inventory:', error);
@@ -560,6 +566,9 @@ router.delete('/:id',
       }
       
       await inventory.destroy();
+      
+      // Realtime: broadcast deleted inventory id
+      try { req.app.get('io').emit('inventoryDeleted', { id: req.params.id }); } catch {}
       res.json({ message: 'Inventory deleted successfully' });
     } catch (error) {
       console.error('Error deleting inventory:', error);

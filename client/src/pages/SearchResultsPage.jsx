@@ -35,29 +35,29 @@ export default function SearchResultsPage() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
-      <h1 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-gray-100">{t('search.results')}</h1>
+    <div className="max-w-6xl mx-auto p-6 bg-white rounded-lg shadow">
+      <h1 className="text-2xl font-semibold mb-4 text-gray-900">{t('search.results')}</h1>
 
       {q ? (
-        <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">{t('search.searchFor', { query: q, defaultValue: `Search for "${q}"` })}</p>
+        <p className="text-sm text-gray-600 mb-4">{t('search.searchFor', { query: q, defaultValue: `Search for "${q}"` })}</p>
       ) : (
-        <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">{t('search.placeholder', { defaultValue: 'Search inventories and items...' })}</p>
+        <p className="text-sm text-gray-600 mb-4">{t('search.placeholder', { defaultValue: 'Search inventories and items...' })}</p>
       )}
 
       {isLoading && (
         <div className="py-8"><LoadingSpinner /></div>
       )}
       {isError && (
-        <div className="py-4 text-red-600 dark:text-red-400">{error?.message || 'Search failed'}</div>
+        <div className="py-4 text-red-600">{error?.message || 'Search failed'}</div>
       )}
 
       {!isLoading && !isError && (
         <div className="space-y-8">
           <section>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">{t('search.inventories', { defaultValue: 'Inventories' })}</h2>
-            <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead className="bg-gray-50 dark:bg-gray-900/50">
+            <h2 className="text-lg font-semibold text-gray-900 mb-3">{t('search.inventories', { defaultValue: 'Inventories' })}</h2>
+            <div className="overflow-x-auto rounded-md border border-gray-200">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
                   <tr>
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('fields.title')}</th>
@@ -65,7 +65,7 @@ export default function SearchResultsPage() {
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('inventory.items', { defaultValue: 'Items' })}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                <tbody className="divide-y divide-gray-200">
                   {inventories.length === 0 && (
                     <tr>
                       <td colSpan={4} className="px-4 py-6 text-center text-sm text-gray-500">{t('search.noResults')}</td>
@@ -74,13 +74,13 @@ export default function SearchResultsPage() {
                   {inventories.map((inv) => (
                     <tr
                       key={inv.id}
-                      className="hover:bg-gray-50 dark:hover:bg-gray-900 cursor-pointer"
+                      className="hover:bg-gray-50 cursor-pointer"
                       onClick={() => navigate(`/inventories/${inv.id}`)}
                     >
-                      <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300">{inv.id}</td>
-                      <td className="px-4 py-2 text-sm text-blue-600 dark:text-blue-400 underline">{inv.title}</td>
-                      <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300">{inv.ownerName || inv.owner?.name || '-'}</td>
-                      <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300">{inv.itemCount ?? '-'}</td>
+                      <td className="px-4 py-2 text-sm text-gray-700">{inv.id}</td>
+                      <td className="px-4 py-2 text-sm text-blue-600 underline">{inv.title}</td>
+                      <td className="px-4 py-2 text-sm text-gray-700">{inv.ownerName || inv.owner?.name || '-'}</td>
+                      <td className="px-4 py-2 text-sm text-gray-700">{inv.itemCount ?? '-'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -89,10 +89,10 @@ export default function SearchResultsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">{t('search.items', { defaultValue: 'Items' })}</h2>
-            <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead className="bg-gray-50 dark:bg-gray-900/50">
+            <h2 className="text-lg font-semibold text-gray-900 mb-3">{t('search.items', { defaultValue: 'Items' })}</h2>
+            <div className="overflow-x-auto rounded-md border border-gray-200">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
                   <tr>
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('fields.title')}</th>
@@ -100,7 +100,7 @@ export default function SearchResultsPage() {
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('fields.customId')}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                <tbody className="divide-y divide-gray-200">
                   {items.length === 0 && (
                     <tr>
                       <td colSpan={4} className="px-4 py-6 text-center text-sm text-gray-500">{t('search.noResults')}</td>
@@ -109,13 +109,13 @@ export default function SearchResultsPage() {
                   {items.map((it) => (
                     <tr
                       key={it.id}
-                      className="hover:bg-gray-50 dark:hover:bg-gray-900 cursor-pointer"
+                      className="hover:bg-gray-50 cursor-pointer"
                       onClick={() => navigate(`/items/${it.id}`)}
                     >
-                      <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300">{it.id}</td>
-                      <td className="px-4 py-2 text-sm text-blue-600 dark:text-blue-400 underline">{it.title}</td>
-                      <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300">{it.inventoryTitle || it.inventory?.title || '-'}</td>
-                      <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300">{it.customId || it.serial || '-'}</td>
+                      <td className="px-4 py-2 text-sm text-gray-700">{it.id}</td>
+                      <td className="px-4 py-2 text-sm text-blue-600 underline">{it.title}</td>
+                      <td className="px-4 py-2 text-sm text-gray-700">{it.inventoryTitle || it.inventory?.title || '-'}</td>
+                      <td className="px-4 py-2 text-sm text-gray-700">{it.customId || it.serial || '-'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -128,15 +128,15 @@ export default function SearchResultsPage() {
               <button
                 onClick={() => goPage(Math.max(1, page - 1))}
                 disabled={page <= 1}
-                className="px-3 py-1 rounded border border-gray-300 dark:border-gray-600 text-sm disabled:opacity-60"
+                className="px-3 py-1 rounded border border-gray-300 text-sm disabled:opacity-60"
               >
                 {t('common.previous')}
               </button>
-              <div className="text-sm text-gray-600 dark:text-gray-300">Page {page} of {totalPages}</div>
+              <div className="text-sm text-gray-600">Page {page} of {totalPages}</div>
               <button
                 onClick={() => goPage(Math.min(totalPages, page + 1))}
                 disabled={page >= totalPages}
-                className="px-3 py-1 rounded border border-gray-300 dark:border-gray-600 text-sm disabled:opacity-60"
+                className="px-3 py-1 rounded border border-gray-300 text-sm disabled:opacity-60"
               >
                 {t('common.next')}
               </button>

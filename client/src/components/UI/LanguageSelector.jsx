@@ -13,13 +13,13 @@ export default function LanguageSelector() {
 
   return (
     <div className="inline-flex items-center space-x-2">
-      <label className="text-sm text-gray-700 dark:text-gray-300 hidden sm:block">
+      <label className="text-sm text-gray-700 hidden sm:block">
         {t('nav.language')}
       </label>
       <select
         value={i18n.language}
         onChange={(e) => changeLanguage(e.target.value)}
-        className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 text-sm rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="bg-white border border-gray-300 text-gray-900 text-sm rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
         aria-label={t('nav.language')}
       >
         <option value="en">EN</option>

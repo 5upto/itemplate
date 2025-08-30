@@ -5,7 +5,6 @@ import { Toaster } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { SocketProvider } from './contexts/SocketContext';
 
 import Navbar from './components/Layout/Navbar';
@@ -54,17 +53,16 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
 
 // Main App Component
 function AppContent() {
-  const { theme } = useTheme();
   const { i18n } = useTranslation();
   
-  // Theme is applied globally by ThemeContext; avoid overriding here.
+  // Theme system removed; UI defaults to light theme.
   
   useEffect(() => {
     document.documentElement.lang = i18n.language;
   }, [i18n.language]);
   
   return (
-    <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200`}>
+    <div className={`min-h-screen bg-gray-50 transition-colors duration-200`}>
       <Router>
         <Navbar />
         <main className="container mx-auto px-4 py-8">
@@ -125,7 +123,7 @@ function AppContent() {
           position="top-right"
           toastOptions={{
             duration: 4000,
-            className: 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100',
+            className: 'bg-white text-gray-900',
           }}
         />
       </Router>
@@ -137,11 +135,9 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <ThemeProvider>
-          <SocketProvider>
-            <AppContent />
-          </SocketProvider>
-        </ThemeProvider>
+        <SocketProvider>
+          <AppContent />
+        </SocketProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

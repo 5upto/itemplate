@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 export default function TagCloud({ tags }) {
   const list = Array.isArray(tags) ? tags : [];
   if (list.length === 0) {
-    return <p className="text-gray-600 dark:text-gray-400">No tags available.</p>;
+    return <p className="text-gray-600">No tags available.</p>;
   }
 
   // Compute sizes based on frequency
@@ -27,7 +27,7 @@ export default function TagCloud({ tags }) {
         <Link
           key={tag?.id || tag?.name}
           to={`/search?q=${encodeURIComponent('#' + (tag?.name ?? ''))}`}
-          className="px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors"
+          className="px-3 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors"
           style={{ fontSize: `${sizeFor(getCount(tag))}rem` }}
           title={`${tag?.name ?? ''} (${getCount(tag)})`}
         >

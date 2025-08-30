@@ -6,6 +6,7 @@ import { getItemsListRequest, createItemRequest, canListItems, canCreateItems } 
 import { Calendar, Package, Tag, Eye, Pencil, Trash, Check, X } from 'lucide-react';
 import LoadingSpinner from '../components/UI/LoadingSpinner';
 import { io } from 'socket.io-client';
+import DeleteModal from '../components/UI/DeleteModal';
 
 // Local helper to mirror server-side custom ID generation for preview purposes
 // Supported element types:
@@ -92,6 +93,13 @@ export default function InventoryDetailPage() {
   const [unread, setUnread] = useState(0);
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText] = useState('');
+  // Delete modals state
+  const [showDeleteItemsModal, setShowDeleteItemsModal] = useState(false);
+  const [pendingItemIds, setPendingItemIds] = useState([]);
+  const [isDeletingItems, setIsDeletingItems] = useState(false);
+  const [showDeleteCommentModal, setShowDeleteCommentModal] = useState(false);
+  const [pendingCommentId, setPendingCommentId] = useState(null);
+  const [isDeletingComment, setIsDeletingComment] = useState(false);
   
   // Data fetching
   const { data, isLoading, isError, error } = useQuery(
@@ -232,6 +240,38 @@ export default function InventoryDetailPage() {
       },
     }
   );
+
+  const deleteSelected = () => {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    setPendingItemIds(ids);
+    setShowDeleteItemsModal(true);
+  };
+
+  const handleConfirmDeleteItems = async () => {
+    if (pendingItemIds.length === 0) return;
+    try {
+      setIsDeletingItems(true);
+      for (const idToDel of pendingItemIds) {
+        try {
+          if (typeof deleteMutation.mutateAsync === 'function') {
+            await deleteMutation.mutateAsync(idToDel);
+          } else {
+            await axios.delete(`/api/items/${idToDel}`);
+          }
+        } catch (e) {
+          // continue others
+        }
+      }
+      clearSelection();
+      queryClient.invalidateQueries(['inventory:items', id]);
+      queryClient.invalidateQueries(['inventory', id]);
+    } finally {
+      setIsDeletingItems(false);
+      setPendingItemIds([]);
+      setShowDeleteItemsModal(false);
+    }
+  };
 
   // Build fixed-slot column definitions from inventory template metadata
   const fixedSlotDefs = React.useMemo(() => {
@@ -498,6 +538,97 @@ export default function InventoryDetailPage() {
     };
   }, [id, queryClient, activeTab, currentUserId]);
 
+  React.useEffect(() => {
+    if (!id) return;
+    const s = socketRef.current;
+    if (!s) return;
+
+    const onInvUpdated = (invObj) => {
+      try {
+        if (!invObj || String(invObj.id) !== String(id)) return;
+        // Update cache with fresh inventory and refetch dependent queries
+        queryClient.setQueryData(['inventory', id], invObj);
+        queryClient.invalidateQueries(['inventory', id]);
+      } catch {}
+    };
+
+    const onInvDeleted = ({ id: deletedId }) => {
+      try {
+        if (String(deletedId) !== String(id)) return;
+        // Navigate back to list if current inventory is deleted elsewhere
+        navigate('/inventories');
+      } catch {}
+    };
+
+    s.on('inventoryUpdated', onInvUpdated);
+    s.on('inventoryDeleted', onInvDeleted);
+
+    return () => {
+      s.off('inventoryUpdated', onInvUpdated);
+      s.off('inventoryDeleted', onInvDeleted);
+    };
+  }, [id, queryClient, navigate]);
+
+  React.useEffect(() => {
+    if (!id) return;
+    const s = socketRef.current;
+    if (!s) return;
+
+    const invalidateItems = () => {
+      try {
+        if (embeddedItems !== null) {
+          // Items are embedded in inventory response
+          queryClient.invalidateQueries(['inventory', id]);
+        } else {
+          // Items are fetched via separate query
+          queryClient.invalidateQueries(['inventory:items', id]);
+        }
+      } catch {}
+    };
+
+    const addOrUpdateInCache = (updater) => {
+      try {
+        if (embeddedItems !== null) return; // Don't mutate embedded cache directly
+        queryClient.setQueryData(['inventory:items', id], (prev = []) => updater(Array.isArray(prev) ? prev : []));
+      } catch {}
+    };
+
+    const onItemCreated = (item) => {
+      if (!item || String(item.inventoryId) !== String(id)) return;
+      addOrUpdateInCache((prev) => (prev.some((x) => x.id === item.id) ? prev : [...prev, item]));
+      invalidateItems();
+    };
+
+    const onItemUpdated = (item) => {
+      if (!item || String(item.inventoryId) !== String(id)) return;
+      addOrUpdateInCache((prev) => prev.map((x) => (x.id === item.id ? { ...x, ...item } : x)));
+      invalidateItems();
+    };
+
+    const onItemDeleted = ({ id: deletedId }) => {
+      if (!deletedId) return;
+      addOrUpdateInCache((prev) => prev.filter((x) => String(x.id) !== String(deletedId)));
+      invalidateItems();
+    };
+
+    const onItemLiked = ({ itemId, likeCount }) => {
+      if (!itemId) return;
+      addOrUpdateInCache((prev) => prev.map((x) => (x.id === itemId ? { ...x, likeCount } : x)));
+    };
+
+    s.on('itemCreated', onItemCreated);
+    s.on('itemUpdated', onItemUpdated);
+    s.on('itemDeleted', onItemDeleted);
+    s.on('itemLiked', onItemLiked);
+
+    return () => {
+      s.off('itemCreated', onItemCreated);
+      s.off('itemUpdated', onItemUpdated);
+      s.off('itemDeleted', onItemDeleted);
+      s.off('itemLiked', onItemLiked);
+    };
+  }, [id, queryClient, embeddedItems]);
+
   // Column visibility (persist per-inventory)
   const storageKey = `inv:${id}:visibleCols`;
   const defaultVisible = React.useMemo(() => {
@@ -528,7 +659,7 @@ export default function InventoryDetailPage() {
         key: 'title',
         label: 'Title',
         render: (it) => (
-          <Link to={`/items/${it.id}`} className="text-blue-600 dark:text-blue-400 hover:underline">{it.title || it.name || it.customId}</Link>
+          <Link to={`/items/${it.id}`} className="text-blue-600 hover:underline">{it.title || it.name || it.customId}</Link>
         ),
       },
       { key: 'customId', label: 'ID', render: (it) => it.customId || it.serial || it.id },
@@ -549,7 +680,7 @@ export default function InventoryDetailPage() {
                 <img
                   src={v}
                   alt={f.label}
-                  className="w-10 h-10 object-cover rounded border border-gray-200 dark:border-gray-700"
+                  className="w-10 h-10 object-cover rounded border border-gray-200"
                   referrerPolicy="no-referrer"
                 />
               </a>
@@ -587,10 +718,10 @@ export default function InventoryDetailPage() {
   if (isError) {
     return (
       <div className="max-w-4xl mx-auto p-6">
-        <p className="text-red-600 dark:text-red-400 mb-2">Failed to load inventory.</p>
-        <p className="text-sm text-gray-600 dark:text-gray-400">{error?.response?.data?.message || error?.message}</p>
+        <p className="text-red-600 mb-2">Failed to load inventory.</p>
+        <p className="text-sm text-gray-600">{error?.response?.data?.message || error?.message}</p>
         <div className="mt-4">
-          <Link to="/inventories" className="text-blue-600 dark:text-blue-400 hover:underline">Back to list</Link>
+          <Link to="/inventories" className="text-blue-600 hover:underline">Back to list</Link>
         </div>
       </div>
     );
@@ -604,29 +735,23 @@ export default function InventoryDetailPage() {
     else if (mode === 'edit') navigate(`/items/${first}?edit=1`);
   };
 
-  const deleteSelected = async () => {
-    const ids = Array.from(selected);
-    if (ids.length === 0) return;
-    if (!confirm(`Delete ${ids.length} selected item(s)?`)) return;
-    for (const idToDel of ids) {
-      try {
-        if (typeof deleteMutation.mutateAsync === 'function') {
-          await deleteMutation.mutateAsync(idToDel);
-        } else {
-          await axios.delete(`/api/items/${idToDel}`);
-        }
-      } catch (e) {
-        // continue others
-      }
+  // Delete modals
+  const handleConfirmDeleteComment = async () => {
+    if (!pendingCommentId) return;
+    try {
+      setIsDeletingComment(true);
+      await deleteCommentMutation.mutateAsync(pendingCommentId);
+    } finally {
+      setIsDeletingComment(false);
+      setPendingCommentId(null);
+      setShowDeleteCommentModal(false);
     }
-    clearSelection();
-    queryClient.invalidateQueries(['inventory:items', id]);
-    queryClient.invalidateQueries(['inventory', id]);
   };
 
   return (
-    <div className="max-w-5xl mx-auto p-6">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+    <>
+    <div className="max-w-5xl mx-auto p-6"> 
+      <div className="bg-white rounded-lg shadow overflow-hidden">
         {(() => {
           const cover = inv.image || inv.imageUrl || inv.coverImage || inv.cover;
           return cover ? (
@@ -636,29 +761,29 @@ export default function InventoryDetailPage() {
         <div className="p-6">
           <div className="flex items-start gap-4">
             <div className="flex-1">
-              <h1 className="text-3xl font-semibold mb-2 text-gray-900 dark:text-gray-100">{inv.title}</h1>
+              <h1 className="text-3xl font-semibold mb-2 text-gray-900">{inv.title}</h1>
               {inv.description && (
-                <p className="text-gray-700 dark:text-gray-300 whitespace-pre-line">{inv.description}</p>
+                <p className="text-gray-700 whitespace-pre-line">{inv.description}</p>
               )}
             </div>
           </div>
 
           <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-            <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+            <div className="flex items-center gap-2 text-gray-600">
               <Package className="h-4 w-4" />
               <span>{itemCount} items</span>
             </div>
-            <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+            <div className="flex items-center gap-2 text-gray-600">
               <Calendar className="h-4 w-4" />
               <span>Created {createdAt}</span>
             </div>
             {inv.category && (
-              <div className="text-gray-600 dark:text-gray-300">
+              <div className="text-gray-600">
                 <span className="font-medium">Category:</span> {inv.category.name}
               </div>
             )}
             {inv.creator && (
-              <div className="flex items-center gap-3 text-gray-600 dark:text-gray-300">
+              <div className="flex items-center gap-3 text-gray-600">
                 <span className="font-medium">Owner:</span>
                 {(() => {
                   const name = (inv.creator.firstName && inv.creator.lastName)
@@ -673,9 +798,9 @@ export default function InventoryDetailPage() {
                         referrerPolicy="no-referrer"
                         onError={(e) => { e.currentTarget.src = fallback; }}
                         alt={name}
-                        className="w-7 h-7 rounded-full object-cover border border-gray-200 dark:border-gray-700"
+                        className="w-7 h-7 rounded-full object-cover border border-gray-200"
                       />
-                      <Link to={`/profile/${inv.creator.id}`} className="text-blue-600 dark:text-blue-400 hover:underline">
+                      <Link to={`/profile/${inv.creator.id}`} className="text-blue-600 hover:underline">
                         {name}
                       </Link>
                     </>
@@ -684,7 +809,7 @@ export default function InventoryDetailPage() {
               </div>
             )}
             {Array.isArray(inv.customIdFormat) && inv.customIdFormat.length > 0 && (
-              <div className="text-gray-700 dark:text-gray-300">
+              <div className="text-gray-700">
                 <span className="font-medium">Next ID:</span> <span className="font-mono">{nextIdPreview}</span>
               </div>
             )}
@@ -692,7 +817,7 @@ export default function InventoryDetailPage() {
 
           {Array.isArray(inv.tags) && inv.tags.length > 0 && (
             <div className="mt-6">
-              <div className="flex items-center gap-2 mb-2 text-gray-700 dark:text-gray-300">
+              <div className="flex items-center gap-2 mb-2 text-gray-700">
                 <Tag className="h-4 w-4" />
                 <span className="font-medium">Tags</span>
               </div>
@@ -701,7 +826,7 @@ export default function InventoryDetailPage() {
                   <Link
                     key={t.id || t}
                     to={`/search?q=${encodeURIComponent(t.name || t)}`}
-                    className="px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 text-xs hover:bg-gray-200 dark:hover:bg-gray-600"
+                    className="px-3 py-1 rounded-full bg-gray-100 text-gray-800 text-xs hover:bg-gray-200"
                   >
                     {t.name || t}
                   </Link>
@@ -710,7 +835,7 @@ export default function InventoryDetailPage() {
             </div>
           )}
 
-          <div className="mt-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="mt-6 border-b border-gray-200">
             <nav className="-mb-px flex justify-center gap-4 overflow-x-auto" aria-label="Tabs" role="tablist">
               {visibleTabs.map((t) => (
                 <a
@@ -722,8 +847,8 @@ export default function InventoryDetailPage() {
                   className={`inline-block whitespace-nowrap select-none px-4 py-2 text-sm font-medium cursor-pointer
                     appearance-none bg-transparent rounded-none shadow-none outline-none focus:outline-none focus:ring-0 hover:bg-transparent active:bg-transparent border-b-2
                     ${activeTab === t
-                      ? 'border-blue-600 text-gray-900 dark:text-gray-100'
-                      : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'}`}
+                      ? 'border-blue-600 text-gray-900'
+                      : 'border-transparent text-gray-600 hover:text-gray-900'}`}
                 >
                   {t === 'Chat' ? (
                     <span className="inline-flex items-center gap-2">
@@ -742,15 +867,15 @@ export default function InventoryDetailPage() {
           {activeTab === 'Items' && (
             <div className="mt-6">
               <div className="mb-4">
-                <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">Columns</h3>
+                <h3 className="text-sm font-medium text-gray-900 mb-2">Columns</h3>
                 <div className="flex flex-wrap gap-4">
                   {columns.map((c) => (
-                    <label key={c.key} className="inline-flex items-center gap-2 text-xs text-gray-800 dark:text-gray-200">
+                    <label key={c.key} className="inline-flex items-center gap-2 text-xs text-gray-800">
                       <input
                         type="checkbox"
                         checked={visibleCols[c.key] !== false}
                         onChange={(e) => setVisibleCols((v) => ({ ...v, [c.key]: e.target.checked }))}
-                        className="h-4 w-4 rounded border-gray-300 dark:border-gray-600"
+                        className="h-4 w-4 rounded border-gray-300"
                       />
                       {c.label}
                     </label>
@@ -761,29 +886,26 @@ export default function InventoryDetailPage() {
               {embeddedItems === null && canListItems() && itemsLoading ? (
                 <LoadingSpinner />
               ) : items.length === 0 ? (
-                <p className="text-sm text-gray-600 dark:text-gray-400">No items yet.</p>
+                <p className="text-sm text-gray-600">No items yet.</p>
               ) : (
                 <div className="overflow-x-auto">
                   {/* Selection toolbar with icon-only actions */}
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-3 text-sm">
-                      {/* <label className="inline-flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 rounded border-gray-300 dark:border-gray-600"
-                          checked={allSelected}
-                          onChange={toggleSelectAll}
-                        />
-                        <span className="text-gray-700 dark:text-gray-300">Select all</span>
-                      </label>
-                      <span className="text-gray-500 dark:text-gray-400">{selected.size} selected</span> */}
+                      {/* <input
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={toggleSelectAll}
+                        className="h-4 w-4 rounded border-gray-300"
+                        aria-label="Select all items"
+                      /> */}
                     </div>
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={() => openFirstSelected('view')}
                         disabled={selected.size === 0}
-                        className="p-2 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-100 disabled:opacity-50 hover:bg-gray-300 dark:hover:bg-gray-600"
+                        className="p-2 rounded-md bg-gray-200 text-gray-800 disabled:opacity-50 hover:bg-gray-300"
                         title="View selected"
                         aria-label="View selected"
                       >
@@ -809,67 +931,58 @@ export default function InventoryDetailPage() {
                       >
                         <Trash className="w-4 h-4" />
                       </button>
-                      <button
-                        type="button"
-                        onClick={clearSelection}
-                        disabled={selected.size === 0}
-                        className="p-2 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 disabled:opacity-50 hover:bg-gray-200 dark:hover:bg-gray-700"
-                        title="Clear selection"
-                        aria-label="Clear selection"
-                      >
-                        ✕
-                      </button>
                     </div>
                   </div>
 
-                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead className="bg-gray-50 dark:bg-gray-900">
-                      <tr>
-                        <th className="px-4 py-2">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 rounded border-gray-300 dark:border-gray-600"
-                            checked={allSelected}
-                            onChange={toggleSelectAll}
-                            aria-label="Select all rows"
-                          />
-                        </th>
-                        {shownColumns.map((c) => (
-                          <th key={c.key} className={`px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider ${c.className || ''}`}>{c.label}</th>
-                        ))}
-                        {/* No per-row Actions column; actions are in the toolbar */}
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                      {items.map((it) => (
-                        <tr key={it.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                          <td className="px-4 py-2">
+                  {/* Items table */}
+                  <div className="overflow-x-auto rounded-md border border-gray-200">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-gray-100 text-gray-700">
+                        <tr>
+                          <th className="px-3 py-2">
                             <input
                               type="checkbox"
-                              className="h-4 w-4 rounded border-gray-300 dark:border-gray-600"
-                              checked={isSelected(it.id)}
-                              onChange={() => toggleSelect(it.id)}
-                              aria-label={`Select ${it.title || it.name || it.customId}`}
+                              checked={allSelected}
+                              onChange={toggleSelectAll}
+                              className="h-4 w-4 rounded border-gray-300"
+                              aria-label="Select all"
                             />
-                          </td>
+                          </th>
                           {shownColumns.map((c) => (
-                            <td key={c.key} className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300">
-                              {typeof c.render === 'function' ? c.render(it) : it[c.key]}
-                            </td>
+                            <th key={c.key} className="px-3 py-2 text-left">{c.label}</th>
                           ))}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {items.map((it) => (
+                          <tr key={it.id} className="border-t border-gray-200 hover:bg-gray-50">
+                            <td className="px-3 py-2">
+                              <input
+                                type="checkbox"
+                                checked={isSelected(it.id)}
+                                onChange={() => toggleSelect(it.id)}
+                                className="h-4 w-4 rounded border-gray-300"
+                                aria-label="Select row"
+                              />
+                            </td>
+                            {shownColumns.map((c) => (
+                              <td key={c.key} className="px-3 py-2">
+                                {c.render(it)}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </div>
           )}
-
           {/* Other Tabs Content */}
           {activeTab === 'Chat' && (
             <div className="mt-6">
-              <div className="space-y-3 max-h-72 overflow-auto bg-gray-50 dark:bg-gray-900 p-3 rounded">
+              <div className="space-y-3 max-h-72 overflow-auto bg-gray-50 p-3 rounded">
                 {(chatData || []).map((c, i) => (
                   <div key={c.id || i} className="text-sm">
                     <div className="flex items-start gap-3">
@@ -877,19 +990,17 @@ export default function InventoryDetailPage() {
                         src={(c.author?.avatar) || `https://ui-avatars.com/api/?name=${encodeURIComponent(((c.author?.firstName||'') + ' ' + (c.author?.lastName||'')).trim() || c.author?.username || 'User')}&background=random`}
                         referrerPolicy="no-referrer"
                         alt={c.author?.username || 'User'}
-                        className="w-7 h-7 rounded-full object-cover border border-gray-200 dark:border-gray-700"
+                        className="w-7 h-7 rounded-full object-cover border border-gray-200"
                       />
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-                          <span className="font-medium text-gray-800 dark:text-gray-200">
-                            {(() => {
-                              const a = c.author || {};
-                              const fn = a.firstName || '';
-                              const ln = a.lastName || '';
-                              const full = fn && ln ? `${fn} ${ln}` : (fn || a.username || 'User');
-                              return full;
-                            })()}
-                          </span>
+                        <div className="flex items-center gap-2 text-gray-600">
+                          <span className="font-medium text-gray-900">{(() => {
+                            const a = c.author || {};
+                            const fn = a.firstName || '';
+                            const ln = a.lastName || '';
+                            const full = fn && ln ? `${fn} ${ln}` : (fn || a.username || 'User');
+                            return full;
+                          })()}</span>
                           <span className="text-xs">{c.createdAt ? new Date(c.createdAt).toLocaleString() : ''}</span>
                           {((c.author?.id === currentUserId) || !!(typeof isAdmin !== 'undefined' && isAdmin)) && (
                             <span className="ml-auto inline-flex items-center gap-1.5">
@@ -908,7 +1019,7 @@ export default function InventoryDetailPage() {
                                   <button
                                     type="button"
                                     onClick={() => { setEditingId(null); setEditText(''); }}
-                                    className="p-1.5 rounded border border-gray-300 dark:border-gray-600"
+                                    className="p-1.5 rounded border border-gray-300"
                                     title="Cancel"
                                     aria-label="Cancel edit"
                                   >
@@ -920,7 +1031,7 @@ export default function InventoryDetailPage() {
                                   <button
                                     type="button"
                                     onClick={() => { setEditingId(c.id); setEditText(c.content || ''); }}
-                                    className="p-1.5 rounded border border-gray-300 dark:border-gray-600"
+                                    className="p-1.5 rounded border border-gray-300"
                                     title="Edit"
                                     aria-label="Edit comment"
                                   >
@@ -928,9 +1039,9 @@ export default function InventoryDetailPage() {
                                   </button>
                                   <button
                                     type="button"
-                                    onClick={() => { if (confirm('Delete this comment?')) deleteCommentMutation.mutate(c.id); }}
+                                    onClick={() => { setPendingCommentId(c.id); setShowDeleteCommentModal(true); }}
                                     disabled={deleteCommentMutation.isLoading}
-                                    className="p-1.5 rounded border border-red-300 text-red-700 dark:border-red-600 dark:text-red-300 disabled:opacity-50"
+                                    className="p-1.5 rounded border border-red-300 text-red-700 disabled:opacity-50"
                                     title={deleteCommentMutation.isLoading ? 'Deleting...' : 'Delete'}
                                     aria-label="Delete comment"
                                   >
@@ -946,17 +1057,17 @@ export default function InventoryDetailPage() {
                             rows={2}
                             value={editText}
                             onChange={(e) => setEditText(e.target.value)}
-                            className="mt-1 w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2"
+                            className="mt-1 w-full rounded-md border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           />
                         ) : (
-                          <div className="text-gray-800 dark:text-gray-100">{c.content || ''}</div>
+                          <div className="text-gray-900">{c.content || ''}</div>
                         )}
                       </div>
                     </div>
                   </div>
                 ))}
                 {(chatData || []).length === 0 && (
-                  <div className="text-sm text-gray-600 dark:text-gray-400">No messages yet.</div>
+                  <div className="text-sm text-gray-600">No messages yet.</div>
                 )}
               </div>
               <div className="mt-3 flex gap-2">
@@ -964,7 +1075,7 @@ export default function InventoryDetailPage() {
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   placeholder="Write a message..."
-                  className="flex-1 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2"
+                  className="flex-1 rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
                 <button
                   type="button"
@@ -981,8 +1092,8 @@ export default function InventoryDetailPage() {
             <div className="mt-6 space-y-4">
               {/* Public toggle */}
               <div className="flex items-center gap-3">
-                <label className="inline-flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
-                  <input type="checkbox" checked={settingsForm.isPublic} onChange={(e)=>setSettingsForm((f)=>({...f,isPublic:e.target.checked}))} className="h-4 w-4 rounded border-gray-300 dark:border-gray-600" />
+                <label className="inline-flex items-center gap-2 text-sm text-gray-800">
+                  <input type="checkbox" checked={settingsForm.isPublic} onChange={(e)=>setSettingsForm((f)=>({...f,isPublic:e.target.checked}))} className="h-4 w-4 rounded border-gray-300 focus:ring-2 focus:ring-blue-500" />
                   Public inventory
                 </label>
                 <button type="button" className="px-3 py-1.5 rounded-md bg-blue-600 text-white disabled:opacity-50" onClick={()=>updateInvMutation.mutate({ isPublic: settingsForm.isPublic })} disabled={updateInvMutation.isLoading}>
@@ -992,10 +1103,10 @@ export default function InventoryDetailPage() {
 
               {/* Collaborators list */}
               <div>
-                <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">Collaborators</h3>
-                <div className="rounded border border-gray-200 dark:border-gray-700 divide-y divide-gray-200 dark:divide-gray-700">
+                <h3 className="text-sm font-medium text-gray-900 mb-2">Collaborators</h3>
+                <div className="rounded border border-gray-200 divide-y divide-gray-200">
                   {(inv.accessUsers || []).length === 0 && (
-                    <div className="p-3 text-sm text-gray-600 dark:text-gray-400">No collaborators yet.</div>
+                    <div className="p-3 text-sm text-gray-600">No collaborators yet.</div>
                   )}
                   {(inv.accessUsers || []).map((u) => {
                     const canWrite = !!(u?.InventoryAccess?.canWrite);
@@ -1003,16 +1114,16 @@ export default function InventoryDetailPage() {
                     const avatar = u.avatar || '';
                     return (
                       <div key={u.id} className="p-3 flex items-center gap-3">
-                        <img src={avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}`} alt={name} className="w-7 h-7 rounded-full object-cover border border-gray-200 dark:border-gray-700" />
+                        <img src={avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}`} alt={name} className="w-7 h-7 rounded-full object-cover border border-gray-200" />
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm text-gray-900 dark:text-gray-100 truncate">{name}</div>
-                          <div className="text-xs text-gray-600 dark:text-gray-400 truncate">{u.email || u.username}</div>
+                          <div className="text-sm text-gray-900 truncate">{name}</div>
+                          <div className="text-xs text-gray-600 truncate">{u.email || u.username}</div>
                         </div>
-                        <span className="text-xs px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">{canWrite ? 'Can edit' : 'Read only'}</span>
+                        <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-800">{canWrite ? 'Can edit' : 'Read only'}</span>
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
-                            className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600"
+                            className="px-2 py-1 text-xs rounded border border-gray-300"
                             disabled={changeAccessMutation.isLoading || !canManageInventory}
                             onClick={() => canManageInventory && changeAccessMutation.mutate({ userId: u.id, canWrite: !canWrite })}
                             title={canWrite ? 'Make read-only' : 'Grant edit'}
@@ -1021,7 +1132,7 @@ export default function InventoryDetailPage() {
                           </button>
                           <button
                             type="button"
-                            className="px-2 py-1 text-xs rounded border border-red-300 dark:border-red-600 text-red-700 dark:text-red-300"
+                            className="px-2 py-1 text-xs rounded border border-red-300 text-red-700"
                             disabled={removeAccessMutation.isLoading || !canManageInventory}
                             onClick={() => canManageInventory && removeAccessMutation.mutate(u.id)}
                           >
@@ -1036,7 +1147,7 @@ export default function InventoryDetailPage() {
 
               {/* Add collaborator (search + select) */}
               <div>
-                <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">Add collaborator</h4>
+                <h4 className="text-sm font-medium text-gray-900 mb-1">Add collaborator</h4>
                 <div className="flex flex-col gap-2">
                   <div className="relative">
                     {!selectedUser ? (
@@ -1046,31 +1157,31 @@ export default function InventoryDetailPage() {
                         value={userQuery}
                         onChange={(e)=>{ setUserQuery(e.target.value); setShowUserDropdown(true); }}
                         onFocus={()=> setShowUserDropdown(true)}
-                        className="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2"
+                        className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         aria-autocomplete="list"
                         aria-expanded={showUserDropdown}
                       />
                     ) : (
-                      <div className="flex items-center justify-between rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2">
+                      <div className="flex items-center justify-between rounded-md border border-gray-300 px-3 py-2">
                         <div className="flex items-center gap-2 min-w-0">
                           <img src={selectedUser.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent((selectedUser.firstName||'')[0]||selectedUser.username||selectedUser.email)}`} alt={selectedUser.username||selectedUser.email} className="w-6 h-6 rounded-full" />
                           <div className="truncate text-sm">
-                            <span className="text-gray-900 dark:text-gray-100">{selectedUser.firstName || selectedUser.username || selectedUser.email}</span>
-                            <span className="ml-2 text-gray-600 dark:text-gray-400">{selectedUser.email}</span>
+                            <span className="text-gray-900">{selectedUser.firstName || selectedUser.username || selectedUser.email}</span>
+                            <span className="ml-2 text-gray-600">{selectedUser.email}</span>
                           </div>
                         </div>
                         <button type="button" className="text-xs text-red-600" onClick={()=>{ setSelectedUser(null); setCollabEmail(''); setUserQuery(''); }}>Clear</button>
                       </div>
                     )}
                     {showUserDropdown && !selectedUser && userResults.length > 0 && (
-                      <ul className="absolute z-10 mt-1 w-full max-h-56 overflow-auto rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow">
+                      <ul className="absolute z-10 mt-1 w-full max-h-56 overflow-auto rounded-md border border-gray-200 bg-white shadow">
                         {userResults.map(u => (
-                          <li key={u.id} className="px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer flex items-center gap-2"
+                          <li key={u.id} className="px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer flex items-center gap-2"
                               onClick={() => { setSelectedUser(u); setCollabEmail(u.email || ''); setShowUserDropdown(false); }}>
                             <img src={u.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent((u.firstName||'')[0]||u.username||u.email)}`} alt={u.username||u.email} className="w-6 h-6 rounded-full" />
                             <div className="min-w-0">
-                              <div className="truncate text-gray-900 dark:text-gray-100">{(u.firstName && u.lastName) ? `${u.firstName} ${u.lastName}` : (u.firstName || u.username || u.email)}</div>
-                              <div className="truncate text-xs text-gray-600 dark:text-gray-400">{u.email}</div>
+                              <div className="truncate text-gray-900">{(u.firstName && u.lastName) ? `${u.firstName} ${u.lastName}` : (u.firstName || u.username || u.email)}</div>
+                              <div className="truncate text-xs text-gray-600">{u.email}</div>
                             </div>
                           </li>
                         ))}
@@ -1078,8 +1189,8 @@ export default function InventoryDetailPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <label className="inline-flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
-                      <input type="checkbox" checked={collabWrite} onChange={(e)=>setCollabWrite(e.target.checked)} className="h-4 w-4 rounded border-gray-300 dark:border-gray-600" />
+                    <label className="inline-flex items-center gap-2 text-sm text-gray-800">
+                      <input type="checkbox" checked={collabWrite} onChange={(e)=>setCollabWrite(e.target.checked)} className="h-4 w-4 rounded border-gray-300 focus:ring-2 focus:ring-blue-500" />
                       Can edit
                     </label>
                     <button
@@ -1092,7 +1203,7 @@ export default function InventoryDetailPage() {
                     </button>
                   </div>
                   {addAccessMutation.isError && (
-                    <div className="text-xs text-red-600 dark:text-red-400">{addAccessMutation.error?.response?.data?.message || addAccessMutation.error?.message}</div>
+                    <div className="text-xs text-red-600">{addAccessMutation.error?.response?.data?.message || addAccessMutation.error?.message}</div>
                   )}
                 </div>
               </div>
@@ -1101,33 +1212,33 @@ export default function InventoryDetailPage() {
           {activeTab === 'Settings' && canManageInventory && (
             <div className="mt-6 space-y-3">
               <div>
-                <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">Title</label>
-                <input value={settingsForm.title} onChange={(e)=>setSettingsForm((f)=>({...f,title:e.target.value}))} className="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2" />
+                <label className="block text-sm text-gray-700 mb-1">Title</label>
+                <input value={settingsForm.title} onChange={(e)=>setSettingsForm((f)=>({...f,title:e.target.value}))} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
               </div>
               <div>
-                <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">Description</label>
-                <textarea rows={3} value={settingsForm.description} onChange={(e)=>setSettingsForm((f)=>({...f,description:e.target.value}))} className="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2" />
+                <label className="block text-sm text-gray-700 mb-1">Description</label>
+                <textarea rows={3} value={settingsForm.description} onChange={(e)=>setSettingsForm((f)=>({...f,description:e.target.value}))} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
               </div>
-              <label className="inline-flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
-                <input type="checkbox" checked={settingsForm.isPublic} onChange={(e)=>setSettingsForm((f)=>({...f,isPublic:e.target.checked}))} className="h-4 w-4 rounded border-gray-300 dark:border-gray-600" />
+              <label className="inline-flex items-center gap-2 text-sm text-gray-800">
+                <input type="checkbox" checked={settingsForm.isPublic} onChange={(e)=>setSettingsForm((f)=>({...f,isPublic:e.target.checked}))} className="h-4 w-4 rounded border-gray-300 focus:ring-2 focus:ring-blue-500" />
                 Public inventory
               </label>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cover Image (optional)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Cover Image (optional)</label>
                 {settingsForm.imageUrl && (
                   <div className="flex items-center gap-3 mb-2">
                     <div className="relative">
-                      <img src={settingsForm.imageUrl} alt="cover" className="w-20 h-20 object-cover rounded border border-gray-200 dark:border-gray-700" />
+                      <img src={settingsForm.imageUrl} alt="cover" className="w-20 h-20 object-cover rounded border border-gray-200" />
                       <span
                         onClick={() => { setSettingsForm((f)=>({ ...f, imageUrl: '' })); setCoverFileKey((k)=>k+1); }}
                         title="Remove"
                         aria-label="Remove"
-                        className="absolute -top-1 -right-1 cursor-pointer select-none text-white text-sm leading-none"
-                      >
+                        className="absolute -top-1 -right-1 cursor-pointer select-none 
+                        w-5 h-5 flex items-center justify-center rounded-full bg-gray-200 hover:bg-gray-300 text-black text-sm leading-none"                      >
                         ×
                       </span>
                     </div>
-                    <a href={settingsForm.imageUrl} target="_blank" rel="noreferrer" className="text-blue-600 dark:text-blue-400 underline">View</a>
+                    <a href={settingsForm.imageUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline">View</a>
                   </div>
                 )}
                 <div className="space-y-2">
@@ -1137,7 +1248,7 @@ export default function InventoryDetailPage() {
                       accept="image/*"
                       key={`cover-${coverFileKey}`}
                       onChange={async (e) => { const file = e.target.files?.[0] || null; if (!file) return; try { const url = await uploadInventoryCover(file); setSettingsForm((f)=>({ ...f, imageUrl: url })); } catch (err) { alert(err?.response?.data?.message || err.message || 'Upload failed'); } }}
-                      className="block w-full text-sm text-gray-900 dark:text-gray-100 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                      className="block w-full text-sm text-gray-900 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
                 </div>
@@ -1156,33 +1267,33 @@ export default function InventoryDetailPage() {
           {activeTab === 'Custom ID' && (
             <div className="mt-6">
               {cidFormat.length > 0 && (
-                <div className="mb-2 text-sm text-gray-700 dark:text-gray-300">
+                <div className="mb-2 text-sm text-gray-700">
                   Example: <span className="font-mono">{previewCustomId(cidFormat, itemCount)}</span>
                 </div>
               )}
               <div className="space-y-2">
                 {cidFormat.map((el, idx) => (
                   <div key={idx} className="flex items-center gap-2">
-                    <span className="w-32 text-xs uppercase text-gray-500 dark:text-gray-400">{el.type}</span>
+                    <span className="w-32 text-xs uppercase text-gray-500">{el.type}</span>
                     {(el.type === 'text' || el.type === 'fixed') && (
-                      <input value={el.value || ''} onChange={(e)=>{ const next=[...cidFormat]; next[idx]={...el,value:e.target.value}; setCidFormat(next); }} className="flex-1 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1" />
+                      <input value={el.value || ''} onChange={(e)=>{ const next=[...cidFormat]; next[idx]={...el,value:e.target.value}; setCidFormat(next); }} className="flex-1 rounded-md border border-gray-300 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
                     )}
                     {el.type === 'sequence' && (
-                      <input type="number" min={0} value={el.padding ?? 0} onChange={(e)=>{ const next=[...cidFormat]; next[idx]={...el,padding:Number(e.target.value||0)}; setCidFormat(next); }} className="w-24 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1" />
+                      <input type="number" min={0} value={el.padding ?? 0} onChange={(e)=>{ const next=[...cidFormat]; next[idx]={...el,padding:Number(e.target.value||0)}; setCidFormat(next); }} className="w-24 rounded-md border border-gray-300 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
                     )}
                     {el.type === 'datetime' && (
-                      <input value={el.format || 'YYYYMMDD'} onChange={(e)=>{ const next=[...cidFormat]; next[idx]={...el,format:e.target.value}; setCidFormat(next); }} placeholder="YYYYMMDD or YYYY-MM-DD" className="flex-1 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1" />
+                      <input value={el.format || 'YYYYMMDD'} onChange={(e)=>{ const next=[...cidFormat]; next[idx]={...el,format:e.target.value}; setCidFormat(next); }} placeholder="YYYYMMDD or YYYY-MM-DD" className="flex-1 rounded-md border border-gray-300 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
                     )}
                     <div className="flex items-center gap-1">
-                      <button type="button" className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600" disabled={idx===0} onClick={()=>{ const n=[...cidFormat]; [n[idx-1],n[idx]]=[n[idx],n[idx-1]]; setCidFormat(n); }}>↑</button>
-                      <button type="button" className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600" disabled={idx===cidFormat.length-1} onClick={()=>{ const n=[...cidFormat]; [n[idx+1],n[idx]]=[n[idx],n[idx+1]]; setCidFormat(n); }}>↓</button>
-                      <button type="button" className="px-2 py-1 text-xs rounded border border-red-300 dark:border-red-600 text-red-700 dark:text-red-300" onClick={()=>setCidFormat(cidFormat.filter((_,i)=>i!==idx))}>Remove</button>
+                      <button type="button" className="px-2 py-1 text-xs rounded border border-gray-300" disabled={idx===0} onClick={()=>{ const n=[...cidFormat]; [n[idx-1],n[idx]]=[n[idx],n[idx-1]]; setCidFormat(n); }}>↑</button>
+                      <button type="button" className="px-2 py-1 text-xs rounded border border-gray-300" disabled={idx===cidFormat.length-1} onClick={()=>{ const n=[...cidFormat]; [n[idx+1],n[idx]]=[n[idx],n[idx+1]]; setCidFormat(n); }}>↓</button>
+                      <button type="button" className="px-2 py-1 text-xs rounded border border-red-300 text-red-700" onClick={()=>setCidFormat(cidFormat.filter((_,i)=>i!==idx))}>Remove</button>
                     </div>
                   </div>
                 ))}
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <select value={cidNewType} onChange={(e)=>setCidNewType(e.target.value)} className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1">
+                <select value={cidNewType} onChange={(e)=>setCidNewType(e.target.value)} className="rounded-md border border-gray-300 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                   <option value="text">Fixed</option>
                   <option value="random20">20-bit random (X5)</option>
                   <option value="random32">32-bit random (X8)</option>
@@ -1192,7 +1303,7 @@ export default function InventoryDetailPage() {
                   <option value="datetime">Date/time</option>
                   <option value="sequence">Sequence</option>
                 </select>
-                <button type="button" className="px-3 py-1.5 rounded border border-gray-300 dark:border-gray-600" onClick={()=>{
+                <button type="button" className="px-3 py-1.5 rounded border border-gray-300" onClick={()=>{
                   const t=cidNewType; const el={ type:t };
                   if (t==='text') el.value=''; if (t==='sequence') el.padding=3; if (t==='datetime') el.format='YYYYMMDD';
                   setCidFormat((arr)=>[...arr, el]);
@@ -1209,7 +1320,7 @@ export default function InventoryDetailPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {['singleLineText','multiLineText','numeric','boolean','documentImage'].map((k)=> (
                   <div key={k}>
-                    <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">{
+                    <h4 className="text-sm font-medium text-gray-900 mb-1">{
                       ({
                         singleLineText: 'Single line',
                         multiLineText: 'Multi line',
@@ -1218,34 +1329,34 @@ export default function InventoryDetailPage() {
                         documentImage: 'Document/Image'
                       })[k] || k
                     }</h4>
-                    <ul className="mb-1 space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                    <ul className="mb-1 space-y-2 text-sm text-gray-700">
                       {(cfBuilder[k]||[]).map((n,idx)=>(
                         <li key={`${k}-${idx}`} className="flex items-center gap-2">
                           <input
                             value={n}
                             onChange={(e)=> setCfBuilder((b)=>{ const arr=[...(b[k]||[])]; arr[idx]=e.target.value; return { ...b, [k]: arr }; })}
-                            className="flex-1 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1"
+                            className="flex-1 rounded-md border border-gray-300 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           />
                           <button type="button" className="text-xs text-red-600" onClick={()=> setCfBuilder((b)=>({ ...b, [k]: (b[k]||[]).filter((_,i)=>i!==idx) }))}>Remove</button>
                         </li>
                       ))}
                       {((cfBuilder[k]||[]).length === 0) && (
-                        <li className="text-xs text-gray-500 dark:text-gray-400">No fields added</li>
+                        <li className="text-xs text-gray-500">No fields added</li>
                       )}
                     </ul>
                   </div>
                 ))}
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <select value={cfNewType} onChange={(e)=>setCfNewType(e.target.value)} className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1">
+                <select value={cfNewType} onChange={(e)=>setCfNewType(e.target.value)} className="rounded-md border border-gray-300 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                   <option value="singleLineText">Single line</option>
                   <option value="multiLineText">Multi line</option>
                   <option value="numeric">Numeric</option>
                   <option value="boolean">Boolean</option>
                   <option value="documentImage">Document/Image</option>
                 </select>
-                <input value={cfNewName} onChange={(e)=>setCfNewName(e.target.value)} placeholder="Field name" className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1" />
-                <button type="button" className="px-3 py-1.5 rounded border border-gray-300 dark:border-gray-600" onClick={()=>{ const name=cfNewName.trim(); if(!name) return; setCfBuilder((b)=> ({ ...b, [cfNewType]: [ ...(b[cfNewType]||[]), name ] })); setCfNewName(''); }}>Add field</button>
+                <input value={cfNewName} onChange={(e)=>setCfNewName(e.target.value)} placeholder="Field name" className="rounded-md border border-gray-300 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                <button type="button" className="px-3 py-1.5 rounded border border-gray-300" onClick={()=>{ const name=cfNewName.trim(); if(!name) return; setCfBuilder((b)=> ({ ...b, [cfNewType]: [ ...(b[cfNewType]||[]), name ] })); setCfNewName(''); }}>Add field</button>
                 <button type="button" className="ml-auto px-3 py-1.5 rounded bg-blue-600 text-white" disabled={updateInvMutation.isLoading} onClick={()=>updateInvMutation.mutate({ customFields: cfBuilder })}>
                   {updateInvMutation.isLoading ? 'Saving...' : 'Save'}
                 </button>
@@ -1257,8 +1368,8 @@ export default function InventoryDetailPage() {
             <div className="mt-6 space-y-4">
               {/* Public toggle */}
               <div className="flex items-center gap-3">
-                <label className="inline-flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
-                  <input type="checkbox" checked={settingsForm.isPublic} onChange={(e)=>setSettingsForm((f)=>({...f,isPublic:e.target.checked}))} className="h-4 w-4 rounded border-gray-300 dark:border-gray-600" />
+                <label className="inline-flex items-center gap-2 text-sm text-gray-800">
+                  <input type="checkbox" checked={settingsForm.isPublic} onChange={(e)=>setSettingsForm((f)=>({...f,isPublic:e.target.checked}))} className="h-4 w-4 rounded border-gray-300 focus:ring-2 focus:ring-blue-500" />
                   Public inventory
                 </label>
                 <button type="button" className="px-3 py-1.5 rounded-md bg-blue-600 text-white disabled:opacity-50" onClick={()=>updateInvMutation.mutate({ isPublic: settingsForm.isPublic })} disabled={updateInvMutation.isLoading}>
@@ -1268,10 +1379,10 @@ export default function InventoryDetailPage() {
 
               {/* Collaborators list */}
               <div>
-                <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">Collaborators</h3>
-                <div className="rounded border border-gray-200 dark:border-gray-700 divide-y divide-gray-200 dark:divide-gray-700">
+                <h3 className="text-sm font-medium text-gray-900 mb-2">Collaborators</h3>
+                <div className="rounded border border-gray-200 divide-y divide-gray-200">
                   {(inv.accessUsers || []).length === 0 && (
-                    <div className="p-3 text-sm text-gray-600 dark:text-gray-400">No collaborators yet.</div>
+                    <div className="p-3 text-sm text-gray-600">No collaborators yet.</div>
                   )}
                   {(inv.accessUsers || []).map((u) => {
                     const canWrite = !!(u?.InventoryAccess?.canWrite);
@@ -1279,16 +1390,16 @@ export default function InventoryDetailPage() {
                     const avatar = u.avatar || '';
                     return (
                       <div key={u.id} className="p-3 flex items-center gap-3">
-                        <img src={avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}`} alt={name} className="w-7 h-7 rounded-full object-cover border border-gray-200 dark:border-gray-700" />
+                        <img src={avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}`} alt={name} className="w-7 h-7 rounded-full object-cover border border-gray-200" />
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm text-gray-900 dark:text-gray-100 truncate">{name}</div>
-                          <div className="text-xs text-gray-600 dark:text-gray-400 truncate">{u.email || u.username}</div>
+                          <div className="text-sm text-gray-900 truncate">{name}</div>
+                          <div className="text-xs text-gray-600 truncate">{u.email || u.username}</div>
                         </div>
-                        <span className="text-xs px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">{canWrite ? 'Can edit' : 'Read only'}</span>
+                        <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-800">{canWrite ? 'Can edit' : 'Read only'}</span>
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
-                            className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600"
+                            className="px-2 py-1 text-xs rounded border border-gray-300"
                             disabled={changeAccessMutation.isLoading || !canManageInventory}
                             onClick={() => canManageInventory && changeAccessMutation.mutate({ userId: u.id, canWrite: !canWrite })}
                             title={canWrite ? 'Make read-only' : 'Grant edit'}
@@ -1297,7 +1408,7 @@ export default function InventoryDetailPage() {
                           </button>
                           <button
                             type="button"
-                            className="px-2 py-1 text-xs rounded border border-red-300 dark:border-red-600 text-red-700 dark:text-red-300"
+                            className="px-2 py-1 text-xs rounded border border-red-300 text-red-700"
                             disabled={removeAccessMutation.isLoading || !canManageInventory}
                             onClick={() => canManageInventory && removeAccessMutation.mutate(u.id)}
                           >
@@ -1312,7 +1423,7 @@ export default function InventoryDetailPage() {
 
               {/* Add collaborator (search + select) */}
               <div>
-                <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">Add collaborator</h4>
+                <h4 className="text-sm font-medium text-gray-900 mb-1">Add collaborator</h4>
                 <div className="flex flex-col gap-2">
                   <div className="relative">
                     {!selectedUser ? (
@@ -1322,31 +1433,31 @@ export default function InventoryDetailPage() {
                         value={userQuery}
                         onChange={(e)=>{ setUserQuery(e.target.value); setShowUserDropdown(true); }}
                         onFocus={()=> setShowUserDropdown(true)}
-                        className="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2"
+                        className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         aria-autocomplete="list"
                         aria-expanded={showUserDropdown}
                       />
                     ) : (
-                      <div className="flex items-center justify-between rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2">
+                      <div className="flex items-center justify-between rounded-md border border-gray-300 px-3 py-2">
                         <div className="flex items-center gap-2 min-w-0">
                           <img src={selectedUser.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent((selectedUser.firstName||'')[0]||selectedUser.username||selectedUser.email)}`} alt={selectedUser.username||selectedUser.email} className="w-6 h-6 rounded-full" />
                           <div className="truncate text-sm">
-                            <span className="text-gray-900 dark:text-gray-100">{selectedUser.firstName || selectedUser.username || selectedUser.email}</span>
-                            <span className="ml-2 text-gray-600 dark:text-gray-400">{selectedUser.email}</span>
+                            <span className="text-gray-900">{selectedUser.firstName || selectedUser.username || selectedUser.email}</span>
+                            <span className="ml-2 text-gray-600">{selectedUser.email}</span>
                           </div>
                         </div>
                         <button type="button" className="text-xs text-red-600" onClick={()=>{ setSelectedUser(null); setCollabEmail(''); setUserQuery(''); }}>Clear</button>
                       </div>
                     )}
                     {showUserDropdown && !selectedUser && userResults.length > 0 && (
-                      <ul className="absolute z-10 mt-1 w-full max-h-56 overflow-auto rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow">
+                      <ul className="absolute z-10 mt-1 w-full max-h-56 overflow-auto rounded-md border border-gray-200 bg-white shadow">
                         {userResults.map(u => (
-                          <li key={u.id} className="px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer flex items-center gap-2"
+                          <li key={u.id} className="px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer flex items-center gap-2"
                               onClick={() => { setSelectedUser(u); setCollabEmail(u.email || ''); setShowUserDropdown(false); }}>
                             <img src={u.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent((u.firstName||'')[0]||u.username||u.email)}`} alt={u.username||u.email} className="w-6 h-6 rounded-full" />
                             <div className="min-w-0">
-                              <div className="truncate text-gray-900 dark:text-gray-100">{(u.firstName && u.lastName) ? `${u.firstName} ${u.lastName}` : (u.firstName || u.username || u.email)}</div>
-                              <div className="truncate text-xs text-gray-600 dark:text-gray-400">{u.email}</div>
+                              <div className="truncate text-gray-900">{(u.firstName && u.lastName) ? `${u.firstName} ${u.lastName}` : (u.firstName || u.username || u.email)}</div>
+                              <div className="truncate text-xs text-gray-600">{u.email}</div>
                             </div>
                           </li>
                         ))}
@@ -1354,8 +1465,8 @@ export default function InventoryDetailPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <label className="inline-flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
-                      <input type="checkbox" checked={collabWrite} onChange={(e)=>setCollabWrite(e.target.checked)} className="h-4 w-4 rounded border-gray-300 dark:border-gray-600" />
+                    <label className="inline-flex items-center gap-2 text-sm text-gray-800">
+                      <input type="checkbox" checked={collabWrite} onChange={(e)=>setCollabWrite(e.target.checked)} className="h-4 w-4 rounded border-gray-300 focus:ring-2 focus:ring-blue-500" />
                       Can edit
                     </label>
                     <button
@@ -1368,7 +1479,7 @@ export default function InventoryDetailPage() {
                     </button>
                   </div>
                   {addAccessMutation.isError && (
-                    <div className="text-xs text-red-600 dark:text-red-400">{addAccessMutation.error?.response?.data?.message || addAccessMutation.error?.message}</div>
+                    <div className="text-xs text-red-600">{addAccessMutation.error?.response?.data?.message || addAccessMutation.error?.message}</div>
                   )}
                 </div>
               </div>
@@ -1378,22 +1489,22 @@ export default function InventoryDetailPage() {
           {activeTab === 'Stats' && (
             <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
               {/* Total items */}
-              <div className="p-3 rounded bg-gray-50 dark:bg-gray-900">
-                <div className="text-gray-500 dark:text-gray-400">Items</div>
-                <div className="text-lg text-gray-900 dark:text-gray-100">{itemCount}</div>
+              <div className="p-3 rounded bg-gray-50">
+                <div className="text-gray-500">Items</div>
+                <div className="text-lg text-gray-900">{itemCount}</div>
               </div>
 
               {/* Created date */}
-              <div className="p-3 rounded bg-gray-50 dark:bg-gray-900">
-                <div className="text-gray-500 dark:text-gray-400">Created</div>
-                <div className="text-lg text-gray-900 dark:text-gray-100">{createdAt}</div>
+              <div className="p-3 rounded bg-gray-50">
+                <div className="text-gray-500">Created</div>
+                <div className="text-lg text-gray-900">{createdAt}</div>
               </div>
 
               {/* Activity sparkline (14 days) */}
-              <div className="p-3 rounded bg-gray-50 dark:bg-gray-900 col-span-2 sm:col-span-1">
+              <div className="p-3 rounded bg-gray-50 col-span-2 sm:col-span-1">
                 <div className="flex items-center justify-between">
-                  <div className="text-gray-500 dark:text-gray-400">Last 14 days</div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">max {spark.max}</div>
+                  <div className="text-gray-500">Last 14 days</div>
+                  <div className="text-xs text-gray-500">max {spark.max}</div>
                 </div>
                 <svg viewBox={`0 0 ${spark.w} ${spark.h}`} className="mt-1 w-full h-8">
                   <path d={spark.d} fill="none" stroke="#3b82f6" strokeWidth="2" />
@@ -1401,38 +1512,38 @@ export default function InventoryDetailPage() {
               </div>
 
               {/* Collaborators */}
-              <div className="p-3 rounded bg-gray-50 dark:bg-gray-900">
-                <div className="text-gray-500 dark:text-gray-400">Collaborators</div>
-                <div className="text-lg text-gray-900 dark:text-gray-100">{Array.isArray(inv.accessUsers) ? inv.accessUsers.length : 0}</div>
+              <div className="p-3 rounded bg-gray-50">
+                <div className="text-gray-500">Collaborators</div>
+                <div className="text-lg text-gray-900">{Array.isArray(inv.accessUsers) ? inv.accessUsers.length : 0}</div>
               </div>
 
               {/* Comments count */}
-              <div className="p-3 rounded bg-gray-50 dark:bg-gray-900">
-                <div className="text-gray-500 dark:text-gray-400">Comments</div>
-                <div className="text-lg text-gray-900 dark:text-gray-100">{Array.isArray(chatData) ? chatData.length : 0}</div>
+              <div className="p-3 rounded bg-gray-50">
+                <div className="text-gray-500">Comments</div>
+                <div className="text-lg text-gray-900">{Array.isArray(chatData) ? chatData.length : 0}</div>
               </div>
 
               {/* Likes (aggregated from item likes) */}
-              <div className="p-3 rounded bg-gray-50 dark:bg-gray-900">
-                <div className="text-gray-500 dark:text-gray-400">Likes</div>
-                <div className="text-lg text-gray-900 dark:text-gray-100">{totalLikes}</div>
+              <div className="p-3 rounded bg-gray-50">
+                <div className="text-gray-500">Likes</div>
+                <div className="text-lg text-gray-900">{totalLikes}</div>
               </div>
 
               {/* Visibility */}
-              <div className="p-3 rounded bg-gray-50 dark:bg-gray-900">
-                <div className="text-gray-500 dark:text-gray-400">Visibility</div>
+              <div className="p-3 rounded bg-gray-50">
+                <div className="text-gray-500">Visibility</div>
                 <div className="text-lg">
-                  <span className={`px-2 py-0.5 rounded text-xs ${inv.isPublic ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200' : 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200'}`}>
+                  <span className={`px-2 py-0.5 rounded text-xs ${inv.isPublic ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-800'}`}>
                     {inv.isPublic ? 'Public' : 'Private'}
                   </span>
                 </div>
               </div>
 
               {Array.isArray(inv.tags) && inv.tags.length > 0 && (
-                <div className="p-3 rounded bg-gray-50 dark:bg-gray-900 col-span-2">
-                  <div className="text-gray-500 dark:text-gray-400 mb-1">Tags</div>
+                <div className="p-3 rounded bg-gray-50 col-span-2">
+                  <div className="text-gray-500 mb-1">Tags</div>
                   <div className="flex flex-wrap gap-2">
-                    {inv.tags.map((t)=> (<span key={t.id||t} className="px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-xs">{t.name || t}</span>))}
+                    {inv.tags.map((t)=> (<span key={t.id||t} className="px-2 py-0.5 rounded bg-gray-100 text-xs">{t.name || t}</span>))}
                   </div>
                 </div>
               )}
@@ -1463,21 +1574,21 @@ export default function InventoryDetailPage() {
 
           {/* Quick Add Item */}
           {canCreateItems() && (
-          <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-4">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">Add Item</h3>
-            {submitErr && <p className="mb-2 text-red-600 dark:text-red-400">{submitErr}</p>}
+          <div className="mt-6 border-t border-gray-200 pt-4">
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Add Item</h3>
+            {submitErr && <p className="mb-2 text-red-600">{submitErr}</p>}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <input
                 placeholder="Title"
                 value={newItem.title}
                 onChange={(e) => setNewItem((x) => ({ ...x, title: e.target.value }))}
-                className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
               <input
                 placeholder="Description (optional)"
                 value={newItem.description}
                 onChange={(e) => setNewItem((x) => ({ ...x, description: e.target.value }))}
-                className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
             {fixedSlotDefs.length > 0 && (
@@ -1487,12 +1598,12 @@ export default function InventoryDetailPage() {
                   const setVal = (v) => setNewItem((x) => ({ ...x, [f.key]: v }));
                   if (f.type === 'boolean') {
                     return (
-                      <label key={f.key} className="inline-flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
+                      <label key={f.key} className="inline-flex items-center gap-2 text-sm text-gray-800">
                         <input
                           type="checkbox"
                           checked={!!val}
                           onChange={(e) => setVal(e.target.checked)}
-                          className="h-4 w-4 rounded border-gray-300 dark:border-gray-600"
+                          className="h-4 w-4 rounded border-gray-300 focus:ring-2 focus:ring-blue-500"
                         />
                         {f.label}
                       </label>
@@ -1501,12 +1612,12 @@ export default function InventoryDetailPage() {
                   if (f.type === 'number') {
                     return (
                       <div key={f.key}>
-                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">{f.label}</label>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">{f.label}</label>
                         <input
                           type="number"
                           value={val}
                           onChange={(e) => setVal(e.target.value ? Number(e.target.value) : '')}
-                          className="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2"
+                          className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
                     );
@@ -1515,21 +1626,21 @@ export default function InventoryDetailPage() {
                   if (f.type === 'file') {
                     return (
                       <div key={f.key}>
-                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">{f.label}</label>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">{f.label}</label>
                         {val && typeof val === 'string' && (
                           <div className="flex items-center gap-3 mb-2">
                             <div className="relative">
-                              <img src={val} alt={f.label} className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-700" />
+                              <img src={val} alt={f.label} className="w-16 h-16 object-cover rounded border border-gray-200" />
                               <span
                                 onClick={() => { setVal(''); setFileKeys((k) => ({ ...k, [f.key]: (k[f.key] || 0) + 1 })); }}
                                 title="Remove"
                                 aria-label="Remove"
-                                className="absolute -top-1 -right-1 cursor-pointer select-none text-white text-sm leading-none"
-                              >
+                                className="absolute -top-1 -right-1 cursor-pointer select-none 
+                                w-5 h-5 flex items-center justify-center rounded-full bg-gray-200 hover:bg-gray-300 text-black text-sm leading-none"                              >
                                 ×
                               </span>
                             </div>
-                            <a href={val} target="_blank" rel="noreferrer" className="text-blue-600 dark:text-blue-400 underline">View</a>
+                            <a href={val} target="_blank" rel="noreferrer" className="text-blue-600 underline">View</a>
                           </div>
                         )}
                         <input
@@ -1547,7 +1658,7 @@ export default function InventoryDetailPage() {
                               alert(err?.response?.data?.message || err.message || 'Upload failed');
                             }
                           }}
-                          className="block w-full text-sm text-gray-900 dark:text-gray-100 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                          className="block w-full text-sm text-gray-900 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                         />
                       </div>
                     );
@@ -1555,11 +1666,11 @@ export default function InventoryDetailPage() {
                   // default string input
                   return (
                     <div key={f.key}>
-                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">{f.label}</label>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">{f.label}</label>
                       <input
                         value={val}
                         onChange={(e) => setVal(e.target.value)}
-                        className="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2"
+                        className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
                     </div>
                   );
@@ -1584,10 +1695,27 @@ export default function InventoryDetailPage() {
           )}
 
           <div className="mt-8">
-            <Link to="/inventories" className="text-blue-600 dark:text-blue-400 hover:underline">Back to list</Link>
+            <Link to="/inventories" className="text-blue-600 hover:underline">Back to list</Link>
           </div>
         </div>
       </div>
     </div>
+    <DeleteModal
+      open={showDeleteItemsModal}
+      title="Delete Items"
+      description={`Delete ${pendingItemIds.length} selected item(s)?`}
+      isLoading={isDeletingItems}
+      onConfirm={handleConfirmDeleteItems}
+      onClose={() => { if (!isDeletingItems) { setShowDeleteItemsModal(false); setPendingItemIds([]); } }}
+    />
+    <DeleteModal
+      open={showDeleteCommentModal}
+      title="Delete Comment"
+      description="Are you sure you want to delete this comment?"
+      isLoading={isDeletingComment || deleteCommentMutation.isLoading}
+      onConfirm={handleConfirmDeleteComment}
+      onClose={() => { if (!isDeletingComment && !deleteCommentMutation.isLoading) { setShowDeleteCommentModal(false); setPendingCommentId(null); } }}
+    />
+    </>
   );
 }

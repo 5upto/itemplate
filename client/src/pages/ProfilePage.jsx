@@ -69,8 +69,8 @@ export default function ProfilePage() {
 
   if (!idToLoad) {
     return (
-      <div className="max-w-3xl mx-auto p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
-        <p className="text-gray-700 dark:text-gray-300">Sign in to view your profile.</p>
+      <div className="max-w-3xl mx-auto p-6 bg-white rounded-lg shadow">
+        <p className="text-gray-700">Sign in to view your profile.</p>
       </div>
     );
   }
@@ -79,8 +79,8 @@ export default function ProfilePage() {
   if (isError) {
     const msg = error?.response?.data?.message || error?.message || 'Failed to load profile';
     return (
-      <div className="max-w-3xl mx-auto p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
-        <p className="text-red-600 dark:text-red-400">{msg}</p>
+      <div className="max-w-3xl mx-auto p-6 bg-white rounded-lg shadow">
+        <p className="text-red-600">{msg}</p>
       </div>
     );
   }
@@ -92,7 +92,7 @@ export default function ProfilePage() {
   const accessible = Array.isArray(invData?.accessible) ? invData.accessible : [];
 
   return (
-    <div className="max-w-6xl mx-auto p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
+    <div className="max-w-6xl mx-auto p-6 bg-white rounded-lg shadow">
       <div className="flex items-center gap-4 mb-6">
         <div className="relative">
           {profile.avatar ? (
@@ -107,7 +107,7 @@ export default function ProfilePage() {
               className="w-16 h-16 rounded-full object-cover"
             />
           ) : (
-            <div className="w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-700" />
+            <div className="w-16 h-16 rounded-full bg-gray-200" />
           )}
           {isOwnProfile && (
             <>
@@ -131,9 +131,9 @@ export default function ProfilePage() {
           )}
         </div>
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">{fullName}</h1>
-          <p className="text-gray-600 dark:text-gray-400">{profile.email}</p>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Joined {new Date(profile.createdAt).toLocaleDateString()}</p>
+          <h1 className="text-2xl font-semibold text-gray-900">{fullName}</h1>
+          <p className="text-gray-600">{profile.email}</p>
+          <p className="text-sm text-gray-500">Joined {new Date(profile.createdAt).toLocaleDateString()}</p>
         </div>
         {canViewPrivates && (
           <div className="ml-auto">
@@ -150,11 +150,11 @@ export default function ProfilePage() {
       <div className="space-y-8">
         <section>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Owned Inventories</h2>
-            <span className="text-sm text-gray-500 dark:text-gray-400">{owned.length}</span>
+            <h2 className="text-xl font-semibold text-gray-900">Owned Inventories</h2>
+            <span className="text-sm text-gray-500">{owned.length}</span>
           </div>
           {owned.length === 0 ? (
-            <p className="text-gray-600 dark:text-gray-400">No inventories yet.</p>
+            <p className="text-gray-600">No inventories yet.</p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {owned.map((inv) => (
@@ -167,11 +167,11 @@ export default function ProfilePage() {
         {canViewPrivates && (
           <section>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Accessible Inventories</h2>
-              <span className="text-sm text-gray-500 dark:text-gray-400">{accessible.length}</span>
+              <h2 className="text-xl font-semibold text-gray-900">Accessible Inventories</h2>
+              <span className="text-sm text-gray-500">{accessible.length}</span>
             </div>
             {accessible.length === 0 ? (
-              <p className="text-gray-600 dark:text-gray-400">No shared inventories.</p>
+              <p className="text-gray-600">No shared inventories.</p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {accessible.map((inv) => (

@@ -73,35 +73,35 @@ export default function EditInventoryPage() {
   if (isError) {
     return (
       <div className="max-w-2xl mx-auto p-6">
-        <p className="text-red-600 dark:text-red-400 mb-2">{t('common.failedToLoad') || 'Failed to load'}</p>
-        <p className="text-sm text-gray-600 dark:text-gray-400">{error?.response?.data?.message || error?.message}</p>
+        <p className="text-red-600 mb-2">{t('common.failedToLoad') || 'Failed to load'}</p>
+        <p className="text-sm text-gray-600">{error?.response?.data?.message || error?.message}</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-2xl mx-auto p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
-      <h1 className="text-2xl font-semibold mb-6 text-gray-900 dark:text-gray-100">{t('inventory.edit') || 'Edit Inventory'}</h1>
-      {err && <div className="mb-4 text-red-600 dark:text-red-400" role="alert">{err}</div>}
+    <div className="max-w-2xl mx-auto p-6 bg-white rounded-lg shadow">
+      <h1 className="text-2xl font-semibold mb-6 text-gray-900">{t('inventory.edit') || 'Edit Inventory'}</h1>
+      {err && <div className="mb-4 text-red-600" role="alert">{err}</div>}
       <form onSubmit={onSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('fields.title')}</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{t('fields.title')}</label>
           <input
             name="title"
             value={form.title}
             onChange={onChange}
             required
-            className="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+            className="w-full rounded-md border border-gray-300 bg-white text-gray-900 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('fields.description') || 'Description'}</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{t('fields.description') || 'Description'}</label>
           <textarea
             name="description"
             value={form.description}
             onChange={onChange}
             rows={4}
-            className="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+            className="w-full rounded-md border border-gray-300 bg-white text-gray-900 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
         <div className="flex items-center gap-2">
@@ -111,9 +111,9 @@ export default function EditInventoryPage() {
             name="isPublic"
             checked={form.isPublic}
             onChange={onChange}
-            className="rounded border-gray-300 dark:border-gray-600"
+            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
           />
-          <label htmlFor="isPublic" className="text-sm text-gray-700 dark:text-gray-300">{t('access.public')}</label>
+          <label htmlFor="isPublic" className="text-sm text-gray-700">{t('access.public')}</label>
         </div>
         <div className="pt-2 flex items-center gap-3">
           <button
@@ -126,12 +126,12 @@ export default function EditInventoryPage() {
           <button
             type="button"
             onClick={() => navigate(-1)}
-            className="px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+            className="px-4 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100"
           >
             {t('common.cancel') || 'Cancel'}
           </button>
         </div>
-        <p className="text-xs text-gray-500 dark:text-gray-400">
+        <p className="text-xs text-gray-500">
           {t('common.note') || 'Note'}: {t('inventory.editBasicOnly') || 'This page currently supports editing basic details. Custom ID format and custom fields editing will be added soon.'}
         </p>
       </form>

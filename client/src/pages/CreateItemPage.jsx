@@ -111,8 +111,8 @@ export default function CreateItemPage() {
   if (error || !inventory) {
     return (
       <div className="max-w-3xl mx-auto">
-        <h1 className="text-2xl font-semibold mb-2 text-gray-900 dark:text-gray-100">{t('messages.notFound')}</h1>
-        <p className="text-gray-600 dark:text-gray-300 mb-4">{t('inventory.inventoryNotFound') || 'Inventory not found.'}</p>
+        <h1 className="text-2xl font-semibold mb-2 text-gray-900">{t('messages.notFound')}</h1>
+        <p className="text-gray-600 mb-4">{t('inventory.inventoryNotFound') || 'Inventory not found.'}</p>
         <Link to="/inventories" className="text-blue-600 hover:underline">{t('nav.inventories')}</Link>
       </div>
     );
@@ -123,36 +123,36 @@ export default function CreateItemPage() {
   return (
     <div className="max-w-3xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{t('inventory.addItem')} – {inventory.title}</h1>
-        <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+        <h1 className="text-3xl font-bold text-gray-900">{t('inventory.addItem')} – {inventory.title}</h1>
+        <p className="text-sm text-gray-600 mt-1">
           {t('item.customIdNote')}
         </p>
       </div>
 
-      <form onSubmit={onSubmit} className="space-y-6 bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+      <form onSubmit={onSubmit} className="space-y-6 bg-white p-6 rounded-lg shadow">
         {fields.length === 0 && (
-          <div className="text-gray-600 dark:text-gray-300">
+          <div className="text-gray-600">
             {t('item.noCustomFields')}
           </div>
         )}
 
         {/* Basic fields */}
         <div className="grid gap-2">
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-200">{t('fields.title') || 'Title'}</label>
+          <label className="text-sm font-medium text-gray-700">{t('fields.title') || 'Title'}</label>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
             required
           />
         </div>
         <div className="grid gap-2">
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-200">{t('fields.description') || 'Description (optional)'}</label>
+          <label className="text-sm font-medium text-gray-700">{t('fields.description') || 'Description (optional)'}</label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={3}
-            className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
@@ -166,7 +166,7 @@ export default function CreateItemPage() {
 
           return (
             <div key={key} className="grid gap-2">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
+              <label className="text-sm font-medium text-gray-700">
                 {label}
                 {required && <span className="text-red-500">*</span>}
               </label>
@@ -175,7 +175,7 @@ export default function CreateItemPage() {
                   type="number"
                   value={value}
                   onChange={(e) => onChange(key, e.target.value === '' ? '' : Number(e.target.value))}
-                  className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required={required}
                 />
               ) : type === 'text' ? (
@@ -183,7 +183,7 @@ export default function CreateItemPage() {
                   value={value}
                   onChange={(e) => onChange(key, e.target.value)}
                   rows={4}
-                  className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required={required}
                 />
               ) : type === 'file' || type === 'image' || type === 'documentImage' ? (
@@ -191,7 +191,7 @@ export default function CreateItemPage() {
                   {value && typeof value === 'string' && (
                     <div className="flex items-center gap-3">
                       <div className="relative">
-                        <img src={value} alt={label} className="w-20 h-20 object-cover rounded border border-gray-200 dark:border-gray-700" />
+                        <img src={value} alt={label} className="w-20 h-20 object-cover rounded border border-gray-200" />
                         <span
                           onClick={() => { onChange(key, ''); setFileKeys((k) => ({ ...k, [key]: (k[key] || 0) + 1 })); }}
                           title={t('common.remove') || 'Remove'}
@@ -201,7 +201,7 @@ export default function CreateItemPage() {
                           ×
                         </span>
                       </div>
-                      <a href={value} target="_blank" rel="noreferrer" className="text-blue-600 dark:text-blue-400 underline">{t('common.view') || 'View'}</a>
+                      <a href={value} target="_blank" rel="noreferrer" className="text-blue-600 underline">{t('common.view') || 'View'}</a>
                     </div>
                   )}
                   <input
@@ -219,7 +219,7 @@ export default function CreateItemPage() {
                         alert(err?.response?.data?.message || err.message || 'Upload failed');
                       }
                     }}
-                    className="block w-full text-sm text-gray-900 dark:text-gray-100 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                    className="block w-full text-sm text-gray-900 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                     required={required && !value}
                   />
                 </div>
@@ -228,12 +228,12 @@ export default function CreateItemPage() {
                   type="text"
                   value={value}
                   onChange={(e) => onChange(key, e.target.value)}
-                  className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required={required}
                 />
               )}
               {f.help && (
-                <p className="text-xs text-gray-500 dark:text-gray-400">{f.help}</p>
+                <p className="text-xs text-gray-500">{f.help}</p>
               )}
             </div>
           );
@@ -242,7 +242,7 @@ export default function CreateItemPage() {
         <div className="flex items-center justify-end gap-2">
           <Link
             to={`/inventories/${inventory.id}`}
-            className="px-4 py-2 rounded-md border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+            className="px-4 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
           >
             {t('common.cancel')}
           </Link>

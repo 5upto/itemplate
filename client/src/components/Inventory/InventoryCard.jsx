@@ -26,11 +26,11 @@ export default function InventoryCard({ inventory, showItemCount = false }) {
   return (
     <Link
       to={`/inventories/${id}`}
-      className="block bg-white dark:bg-gray-800 rounded-xl p-5 shadow hover:shadow-lg transition-shadow border border-gray-200 dark:border-gray-700 h-full"
+      className="block bg-white rounded-xl p-5 shadow hover:shadow-lg transition-shadow border border-gray-200 h-full"
     >
       <div className="flex items-start gap-4">
         {coverSrc ? (
-          <div className="relative shrink-0 w-16 h-16 rounded overflow-hidden border border-gray-200 dark:border-gray-700">
+          <div className="relative shrink-0 w-16 h-16 rounded overflow-hidden border border-gray-200">
             <img
               src={coverSrc}
               alt={displayTitle}
@@ -39,7 +39,7 @@ export default function InventoryCard({ inventory, showItemCount = false }) {
                 e.target.onerror = null;
                 e.target.style.display = 'none';
                 e.target.parentElement.innerHTML = `
-                  <div class="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-700">
+                  <div class="w-full h-full flex items-center justify-center bg-gray-100">
                     <Package className="h-6 w-6 text-gray-400" />
                   </div>
                 `;
@@ -47,17 +47,17 @@ export default function InventoryCard({ inventory, showItemCount = false }) {
             />
           </div>
         ) : (
-          <div className="shrink-0 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+          <div className="shrink-0 p-3 rounded-lg bg-blue-50 text-blue-600">
             <Package className="h-6 w-6" />
           </div>
         )}
         <div className="min-w-0">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">{displayTitle}</h3>
+          <h3 className="text-lg font-semibold text-gray-900 truncate">{displayTitle}</h3>
           {description && (
-            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 line-clamp-2">{description}</p>
+            <p className="mt-1 text-sm text-gray-600 line-clamp-2">{description}</p>
           )}
           {showItemCount && (
-            <div className="mt-3 inline-flex items-center text-sm text-gray-700 dark:text-gray-300">
+            <div className="mt-3 inline-flex items-center text-sm text-gray-700">
               <Boxes className="h-4 w-4 mr-1" />
               {itemCount ?? 0}
             </div>

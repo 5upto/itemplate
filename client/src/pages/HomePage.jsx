@@ -145,7 +145,7 @@ const HomePage = () => {
       {user && (
         <motion.section variants={itemVariants} className="space-y-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Your Inventories</h2>
+            <h2 className="text-3xl font-bold text-gray-900">Your Inventories</h2>
             <Link
               to="/inventories/create"
               className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"
@@ -162,8 +162,8 @@ const HomePage = () => {
             (() => {
               const owned = Array.isArray(myInvData?.owned) ? myInvData.owned : [];
               return owned.length === 0 ? (
-                <div className="text-center bg-white dark:bg-gray-800 rounded-xl p-8 border border-gray-200 dark:border-gray-700">
-                  <p className="text-gray-700 dark:text-gray-300 mb-4">You don't have any inventories yet.</p>
+                <div className="text-center bg-white rounded-xl p-8 border border-gray-200">
+                  <p className="text-gray-700 mb-4">You don't have any inventories yet.</p>
                   <Link
                     to="/inventories/create"
                     className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-md"
@@ -193,24 +193,24 @@ const HomePage = () => {
 
       {/* Stats Section */}
       <motion.section variants={itemVariants} className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-8 shadow-lg text-center border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-shadow">
-          <Package className="h-12 w-12 mx-auto mb-4 text-blue-600 dark:text-blue-400" />
-          <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+        <div className="bg-white rounded-xl p-8 shadow-lg text-center border border-gray-200 hover:shadow-xl transition-shadow">
+          <Package className="h-12 w-12 mx-auto mb-4 text-blue-600" />
+          <h3 className="text-2xl font-bold text-gray-900 mb-2">
             {safeArray(latestInventories).length || 0}
           </h3>
-          <p className="text-gray-600 dark:text-gray-400">{t('home.stats.inventories')}</p>
+          <p className="text-gray-600">{t('home.stats.inventories')}</p>
         </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-8 shadow-lg text-center border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-shadow">
-          <TrendingUp className="h-12 w-12 mx-auto mb-4 text-green-600 dark:text-green-400" />
-          <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">{popularItemTotal}</h3>
-          <p className="text-gray-600 dark:text-gray-400">{t('home.stats.items')}</p>
+        <div className="bg-white rounded-xl p-8 shadow-lg text-center border border-gray-200 hover:shadow-xl transition-shadow">
+          <TrendingUp className="h-12 w-12 mx-auto mb-4 text-green-600" />
+          <h3 className="text-2xl font-bold text-gray-900 mb-2">{popularItemTotal}</h3>
+          <p className="text-gray-600">{t('home.stats.items')}</p>
         </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-8 shadow-lg text-center border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-shadow">
-          <Tag className="h-12 w-12 mx-auto mb-4 text-purple-600 dark:text-purple-400" />
-          <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+        <div className="bg-white rounded-xl p-8 shadow-lg text-center border border-gray-200 hover:shadow-xl transition-shadow">
+          <Tag className="h-12 w-12 mx-auto mb-4 text-purple-600" />
+          <h3 className="text-2xl font-bold text-gray-900 mb-2">
             {tags?.length || 0}
           </h3>
-          <p className="text-gray-600 dark:text-gray-400">{t('home.stats.tags')}</p>
+          <p className="text-gray-600">{t('home.stats.tags')}</p>
         </div>
       </motion.section>
 
@@ -218,14 +218,14 @@ const HomePage = () => {
       <motion.section variants={itemVariants}>
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-3">
-            <Clock className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+            <Clock className="h-6 w-6 text-blue-600" />
+            <h2 className="text-3xl font-bold text-gray-900">
               {t('home.latestInventories')}
             </h2>
           </div>
           <Link
             to="/inventories"
-            className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium transition-colors"
+            className="text-blue-600 hover:text-blue-700 font-medium transition-colors"
           >
             {t('home.viewAll')} →
           </Link>
@@ -256,8 +256,8 @@ const HomePage = () => {
       <motion.section variants={itemVariants}>
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-3">
-            <TrendingUp className="h-6 w-6 text-green-600 dark:text-green-400" />
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+            <TrendingUp className="h-6 w-6 text-green-600" />
+            <h2 className="text-3xl font-bold text-gray-900">
               {t('home.popularInventories')}
             </h2>
           </div>
@@ -287,8 +287,8 @@ const HomePage = () => {
       {/* Tag Cloud */}
       <motion.section variants={itemVariants}>
         <div className="flex items-center space-x-3 mb-8">
-          <Tag className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+          <Tag className="h-6 w-6 text-purple-600" />
+          <h2 className="text-3xl font-bold text-gray-900">
             {t('home.tagCloud')}
           </h2>
         </div>
@@ -298,7 +298,7 @@ const HomePage = () => {
             <LoadingSpinner size="lg" />
           </div>
         ) : (
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-8 shadow-lg border border-gray-200 dark:border-gray-700">
+          <div className="bg-white rounded-xl p-8 shadow-lg border border-gray-200">
             <TagCloud tags={tags || []} />
           </div>
         )}
@@ -307,12 +307,12 @@ const HomePage = () => {
       {/* Call to Action */}
       <motion.section 
         variants={itemVariants}
-        className="text-center py-16 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700"
+        className="text-center py-16 bg-gray-50 rounded-2xl border border-gray-200"
       >
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+        <h2 className="text-3xl font-bold text-gray-900 mb-4">
           {t('home.cta.title')}
         </h2>
-        <p className="text-lg text-gray-600 dark:text-gray-400 mb-8 max-w-2xl mx-auto">
+        <p className="text-lg text-gray-600 mb-8 max-w-2xl mx-auto">
           {t('home.cta.description')}
         </p>
         {user ? (
@@ -325,7 +325,7 @@ const HomePage = () => {
         ) : (
           <Link
             to="/login"
-            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-lg font-semibold text-lg transition-colors shadow-lg hover:shadow-xl transform hover:scale-105 duration-200"
+            className="bg-blue-600 hover:bg-blue-700 text-white-600 px-8 py-4 rounded-lg font-semibold text-lg transition-colors shadow-lg hover:shadow-xl transform hover:scale-105 duration-200"
           >
             {t('home.cta.button')}
           </Link>
