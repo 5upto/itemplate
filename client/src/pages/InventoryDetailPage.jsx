@@ -944,7 +944,7 @@ export default function InventoryDetailPage() {
                               type="checkbox"
                               checked={allSelected}
                               onChange={toggleSelectAll}
-                              className="h-4 w-4 rounded border-gray-300"
+                              className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:checked:bg-blue-600"
                               aria-label="Select all"
                             />
                           </th>
@@ -955,13 +955,13 @@ export default function InventoryDetailPage() {
                       </thead>
                       <tbody>
                         {items.map((it) => (
-                          <tr key={it.id} className="border-t border-gray-200 hover:bg-gray-50">
+                          <tr key={it.id} className="border-t border-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50">
                             <td className="px-3 py-2">
                               <input
                                 type="checkbox"
                                 checked={isSelected(it.id)}
                                 onChange={() => toggleSelect(it.id)}
-                                className="h-4 w-4 rounded border-gray-300"
+                                className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:checked:bg-blue-600"
                                 aria-label="Select row"
                               />
                             </td>
@@ -1603,7 +1603,7 @@ export default function InventoryDetailPage() {
                           type="checkbox"
                           checked={!!val}
                           onChange={(e) => setVal(e.target.checked)}
-                          className="h-4 w-4 rounded border-gray-300 focus:ring-2 focus:ring-blue-500"
+                          className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:checked:bg-blue-600"
                         />
                         {f.label}
                       </label>

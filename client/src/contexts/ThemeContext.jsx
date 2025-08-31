@@ -24,8 +24,9 @@ export const ThemeProvider = ({ children }) => {
   });
 
   useEffect(() => {
-    if (user && user.theme !== theme) {
-      setTheme(user.theme);
+    const userTheme = user?.theme;
+    if (user && (userTheme === 'light' || userTheme === 'dark') && userTheme !== theme) {
+      setTheme(userTheme);
     }
   }, [user]);
 
@@ -33,11 +34,39 @@ export const ThemeProvider = ({ children }) => {
   useEffect(() => {
     const root = document.documentElement;
     if (!root) return;
+    
+    // Always set both class and data-theme attribute
     root.classList.toggle('dark', theme === 'dark');
     root.setAttribute('data-theme', theme);
-    // Improve native form controls, scrollbars on supported browsers
     document.body && (document.body.style.colorScheme = theme);
+    
+    // Ensure background colors are set correctly
+    if (theme === 'light') {
+      document.body.style.backgroundColor = '#f9fafb'; // bg-gray-50
+      document.body.classList.remove('dark');
+    } else {
+      document.body.style.backgroundColor = '#111827'; // gray-900
+      document.body.classList.add('dark');
+    }
   }, [theme]);
+
+  // Keep html.dark in sync if something else changes data-theme externally
+  useEffect(() => {
+    const root = document.documentElement;
+    if (!root) return;
+    const observer = new MutationObserver(() => {
+      const attrTheme = root.getAttribute('data-theme');
+      if (attrTheme === 'light' && root.classList.contains('dark')) {
+        root.classList.remove('dark');
+        document.body && (document.body.style.colorScheme = 'light');
+      } else if (attrTheme === 'dark' && !root.classList.contains('dark')) {
+        root.classList.add('dark');
+        document.body && (document.body.style.colorScheme = 'dark');
+      }
+    });
+    observer.observe(root, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => observer.disconnect();
+  }, []);
 
   const toggleTheme = async () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
@@ -53,9 +82,23 @@ export const ThemeProvider = ({ children }) => {
     }
   };
 
+  const setThemeExplicit = async (value) => {
+    const newTheme = value === 'dark' ? 'dark' : 'light';
+    setTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
+    if (user) {
+      try {
+        await updatePreferences({ theme: newTheme });
+      } catch (error) {
+        console.error('Failed to save theme preference:', error);
+      }
+    }
+  };
+
   const value = {
     theme,
     toggleTheme,
+    setTheme: setThemeExplicit,
     isDark: theme === 'dark'
   };
 

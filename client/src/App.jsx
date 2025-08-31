@@ -5,6 +5,7 @@ import { Toaster } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import { SocketProvider } from './contexts/SocketContext';
 
 import Navbar from './components/Layout/Navbar';
@@ -62,10 +63,10 @@ function AppContent() {
   }, [i18n.language]);
   
   return (
-    <div className={`min-h-screen bg-gray-50 transition-colors duration-200`}>
+    <div className="min-h-screen bg-white dark:bg-gray-50 transition-colors duration-200">
       <Router>
         <Navbar />
-        <main className="container mx-auto px-4 py-8">
+        <main className="container mx-auto px-4 py-8 bg-white dark:bg-gray-50 transition-colors duration-200">
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/login" element={<LoginPage />} />
@@ -123,7 +124,7 @@ function AppContent() {
           position="top-right"
           toastOptions={{
             duration: 4000,
-            className: 'bg-white text-gray-900',
+            className: 'bg-white text-gray-900 dark:bg-gray-800 dark:text-gray-100',
           }}
         />
       </Router>
@@ -135,9 +136,11 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <SocketProvider>
-          <AppContent />
-        </SocketProvider>
+        <ThemeProvider>
+          <SocketProvider>
+            <AppContent />
+          </SocketProvider>
+        </ThemeProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

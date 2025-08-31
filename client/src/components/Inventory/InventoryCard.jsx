@@ -39,15 +39,17 @@ export default function InventoryCard({ inventory, showItemCount = false }) {
                 e.target.onerror = null;
                 e.target.style.display = 'none';
                 e.target.parentElement.innerHTML = `
-                  <div class="w-full h-full flex items-center justify-center bg-gray-100">
-                    <Package className="h-6 w-6 text-gray-400" />
-                  </div>
-                `;
+          <div class="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-800">
+            <svg class="h-6 w-6 text-gray-400 dark:text-gray-300" fill="currentColor">
+              <use href="#package-icon" />
+            </svg>
+          </div>
+        `;
               }}
             />
           </div>
         ) : (
-          <div className="shrink-0 p-3 rounded-lg bg-blue-50 text-blue-600">
+          <div className="shrink-0 p-3 rounded-lg bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-300">
             <Package className="h-6 w-6" />
           </div>
         )}

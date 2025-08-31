@@ -27,8 +27,14 @@ export default function TagCloud({ tags }) {
         <Link
           key={tag?.id || tag?.name}
           to={`/search?q=${encodeURIComponent('#' + (tag?.name ?? ''))}`}
-          className="px-3 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors"
-          style={{ fontSize: `${sizeFor(getCount(tag))}rem` }}
+          className="
+          px-3 py-1 rounded-full
+          bg-blue-50 dark:bg-blue-900
+          text-blue-700 dark:text-blue-200
+          border border-blue-200 dark:border-blue-700
+          hover:bg-blue-100 dark:hover:bg-blue-800
+          transition-colors
+        "          style={{ fontSize: `${sizeFor(getCount(tag))}rem` }}
           title={`${tag?.name ?? ''} (${getCount(tag)})`}
         >
           #{tag?.name}

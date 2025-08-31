@@ -37,7 +37,7 @@ export default function InventoryListPage() {
     const invalidateLists = () => {
       try {
         queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'inventories:list' });
-      } catch {}
+      } catch { }
     };
     socket.on('inventoryCreated', invalidateLists);
     socket.on('inventoryUpdated', invalidateLists);
@@ -221,18 +221,19 @@ export default function InventoryListPage() {
                 return (
                   <tr
                     key={inv.id}
-                    className="hover:bg-gray-50 cursor-pointer"
+                    className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
                     onClick={() => navigate(`/inventories/${inv.id}`)}
                   >
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
-                        className="h-4 w-4 rounded border-gray-300"
+                        className="h-4 w-4 rounded border-gray-300 dark:border-gray-600"
                         checked={selected.includes(inv.id)}
                         onChange={() => toggleOne(inv.id)}
                         aria-label={t('common.select')}
                       />
                     </td>
+
                     <td className="px-4 py-3">
                       {cover ? (
                         <img src={cover} alt={inv.name || inv.title} className="w-12 h-12 rounded object-cover border border-gray-200" />

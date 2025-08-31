@@ -170,7 +170,7 @@ export default function LoginPage() {
       <div className="space-y-3">
         <button
           onClick={() => handleOAuth('google')}
-          className="w-full inline-flex items-center justify-center rounded-md bg-white border border-gray-300 text-white hover:bg-gray-50"
+          className="w-full inline-flex items-center justify-center rounded-md text-white border hover:bg-gray-50 px-4 py-2"
         >
           <svg className="mr-2 h-5 w-5" viewBox="0 0 48 48" aria-hidden="true">
             <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.2 31.9 29 35 24 35c-6.1 0-11-4.9-11-11s4.9-11 11-11c2.8 0 5.4 1 7.4 2.9l5.7-5.7C33.7 6.1 29.1 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20c10 0 19-7.3 19-20 0-1.3-.1-2.7-.4-3.5z"/>
@@ -182,7 +182,7 @@ export default function LoginPage() {
         </button>
         <button
           onClick={() => handleOAuth('github')}
-          className="w-full inline-flex items-center justify-center rounded-md bg-white border border-gray-300 text-white hover:bg-gray-50"
+          className="w-full inline-flex items-center justify-center rounded-md text-white border hover:bg-gray-50 px-4 py-2"
         >
           <svg className="mr-2 h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.48 2 2 6.58 2 12.26c0 4.51 2.87 8.33 6.84 9.68.5.1.68-.22.68-.48 0-.24-.01-.87-.01-1.71-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.63.07-.63 1 .07 1.53 1.05 1.53 1.05.9 1.57 2.36 1.12 2.94.86.09-.67.35-1.12.63-1.38-2.22-.26-4.56-1.14-4.56-5.08 0-1.12.39-2.03 1.03-2.74-.1-.26-.45-1.3.1-2.7 0 0 .84-.27 2.76 1.04a9.24 9.24 0 0 1 5.02 0c1.92-1.31 2.76-1.04 2.76-1.04.55 1.4.2 2.44.1 2.7.64.71 1.03 1.62 1.03 2.74 0 3.95-2.34 4.82-4.57 5.07.36.32.68.95.68 1.92 0 1.38-.01 2.48-.01 2.82 0 .26.18.58.69.48A10.06 10.06 0 0 0 22 12.26C22 6.58 17.52 2 12 2z"/>

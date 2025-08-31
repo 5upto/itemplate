@@ -11,16 +11,20 @@ import {
   X,
   Package,
   Shield,
-  Plus
+  Plus,
+  Moon,
+  Sun
 } from 'lucide-react';
 
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import SearchBar from '../Search/SearchBar';
 import LanguageSelector from '../UI/LanguageSelector';
 
 const Navbar = () => {
   const { t } = useTranslation();
   const { user, logout, isAdmin } = useAuth();
+  const { isDark, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const userMenuRef = useRef(null);
 
@@ -54,7 +58,7 @@ const Navbar = () => {
   }, []);
 
   return (
-    <nav className="sticky top-0 z-50 bg-white shadow-lg border-b border-gray-200 transition-colors duration-200">
+    <nav className="sticky top-0 z-50 bg-white dark:bg-white-800 shadow-lg border-gray-200 dark:border-gray-700 transition-colors duration-200">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
@@ -75,7 +79,7 @@ const Navbar = () => {
           <div className="hidden md:flex items-center space-x-4">
             <Link
               to="/inventories"
-              className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md transition-colors"
+              className="text-gray-700 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 px-3 py-2 rounded-md transition-colors"
             >
               {t('nav.inventories')}
             </Link>
@@ -83,7 +87,7 @@ const Navbar = () => {
             {user && (
               <Link
                 to="/inventories/create"
-                className="flex items-center gap-2 text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md transition-colors"
+                className="flex items-center gap-2 text-gray-700 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 px-3 py-2 rounded-md transition-colors"
                 title="Create Inventory"
               >
                 <Plus className="h-4 w-4" />
@@ -92,10 +96,23 @@ const Navbar = () => {
             )}
 
             <Link
-              className="flex items-center gap-2 text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md transition-colors"
+              className="flex items-center gap-2 text-gray-700 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 px-3 py-2 rounded-md transition-colors"
             >
               <LanguageSelector />
             </Link>
+
+            {/* Theme toggle */}
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {isDark ? (
+                <Sun className="h-5 w-5" />
+              ) : (
+                <Moon className="h-5 w-5" />
+              )}
+            </button>
 
             {user ? (
               <div className="relative" ref={userMenuRef}>
@@ -109,7 +126,7 @@ const Navbar = () => {
                       e.preventDefault();
                     }
                   }}
-                  className="flex items-center p-2 rounded-full hover:bg-gray-100 cursor-pointer transition-colors"
+                  className="flex items-center p-2 rounded-full hover:bg-gray-50 cursor-pointer transition-colors"
                 >
                   {user.avatar ? (
                     <img
@@ -135,11 +152,11 @@ const Navbar = () => {
                       initial="hidden"
                       animate="visible"
                       exit="exit"
-                      className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1"
+                      className="absolute right-0 mt-2 w-48 bg-white dark:bg-white rounded-md shadow-lg border border-gray-200 py-1"
                     >
                       <Link
                         to="/profile"
-                        className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-100 transition-colors"
+                        className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-700/50 transition-colors"
                         onClick={() => setShowUserMenu(false)}
                       >
                         <User className="h-4 w-4 mr-3" />
@@ -149,7 +166,7 @@ const Navbar = () => {
                       {isAdmin && (
                         <Link
                           to="/admin"
-                          className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-100 transition-colors"
+                          className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-700/50 transition-colors"
                           onClick={() => setShowUserMenu(false)}
                         >
                           <Shield className="h-4 w-4 mr-3" />
@@ -157,11 +174,11 @@ const Navbar = () => {
                         </Link>
                       )}
 
-                      <hr className="my-1 border-gray-200" />
+                      <hr className="my-1 border-gray-200 dark:border-gray-700" />
 
                       <Link
                         onClick={handleLogout}
-                        className="flex items-center w-full px-4 py-2 text-gray-700 hover:bg-gray-100 transition-colors"
+                        className="flex items-center w-full px-4 py-2 text-gray-700 hover:bg-gray-700/50 transition-colors"
                       >
                         <LogOut className="h-4 w-4 mr-3" />
                         {t('nav.logout')}
@@ -183,7 +200,7 @@ const Navbar = () => {
           {/* Mobile menu button */}
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="md:hidden p-2 rounded-md text-gray-700 hover:bg-gray-100 transition-colors"
+            className="md:hidden p-2 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
             {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </button>
@@ -202,12 +219,12 @@ const Navbar = () => {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="md:hidden bg-white border-t border-gray-200 overflow-hidden"
+            className="md:hidden bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 overflow-hidden"
           >
             <div className="px-4 py-2 space-y-2">
               <Link
                 to="/inventories"
-                className="block px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+                className="block px-3 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
                 onClick={() => setIsMenuOpen(false)}
               >
                 {t('nav.inventories')}
@@ -216,7 +233,7 @@ const Navbar = () => {
               {user && (
                 <Link
                   to="/inventories/create"
-                  className="block px-3 py-2 text-white hover:bg-gray-100 rounded-md transition-colors"
+                  className="block px-3 py-2 text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
                   onClick={() => setIsMenuOpen(false)}
                 >
                   Create
@@ -224,16 +241,26 @@ const Navbar = () => {
               )}
 
               <Link
-                className="block px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+                className="block px-3 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
                 >
                 <LanguageSelector />
               </Link>
+
+              {/* Mobile theme toggle */}
+              <button
+                type="button"
+                onClick={() => { toggleTheme(); setIsMenuOpen(false); }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
+              >
+                {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                <span>{isDark ? 'Light mode' : 'Dark mode'}</span>
+              </button>
 
               {user ? (
                 <>
                   <Link
                     to="/profile"
-                    className="flex items-center px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+                    className="flex items-center px-3 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     <User className="h-4 w-4 mr-3" />
@@ -243,7 +270,7 @@ const Navbar = () => {
                   {isAdmin && (
                     <Link
                       to="/admin"
-                      className="flex items-center px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+                      className="flex items-center px-3 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
                       onClick={() => setIsMenuOpen(false)}
                     >
                       <Shield className="h-4 w-4 mr-3" />
@@ -253,7 +280,7 @@ const Navbar = () => {
 
                   <Link
                     onClick={handleLogout}
-                    className="flex items-center w-full px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+                    className="flex items-center w-full px-3 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
                   >
                     <LogOut className="h-4 w-4 mr-3" />
                     {t('nav.logout')}
