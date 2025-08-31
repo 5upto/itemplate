@@ -79,8 +79,12 @@ export default function SearchResultsPage() {
                     >
                       <td className="px-4 py-2 text-sm text-gray-700">{inv.id}</td>
                       <td className="px-4 py-2 text-sm text-blue-600 underline">{inv.title}</td>
-                      <td className="px-4 py-2 text-sm text-gray-700">{inv.ownerName || inv.owner?.name || '-'}</td>
-                      <td className="px-4 py-2 text-sm text-gray-700">{inv.itemCount ?? '-'}</td>
+                      <td className="px-4 py-2 text-sm text-gray-700">
+                        {inv.owner?.name || inv.owner?.username || '-'}
+                      </td>
+                      <td className="px-4 py-2 text-sm text-gray-700">
+                        {inv.itemCount ?? (inv.items ? inv.items.length : 0)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -114,8 +118,12 @@ export default function SearchResultsPage() {
                     >
                       <td className="px-4 py-2 text-sm text-gray-700">{it.id}</td>
                       <td className="px-4 py-2 text-sm text-blue-600 underline">{it.title}</td>
-                      <td className="px-4 py-2 text-sm text-gray-700">{it.inventoryTitle || it.inventory?.title || '-'}</td>
-                      <td className="px-4 py-2 text-sm text-gray-700">{it.customId || it.serial || '-'}</td>
+                      <td className="px-4 py-2 text-sm text-gray-700">
+                        {it.inventory?.title || it.inventoryTitle || '-'}
+                      </td>
+                      <td className="px-4 py-2 text-sm text-gray-700">
+                        {it.customId || it.serial || '-'}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
