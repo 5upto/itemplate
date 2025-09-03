@@ -81,8 +81,6 @@ export default function InventoryDetailPage() {
   // State hooks
   const [fileKeys, setFileKeys] = React.useState({});
   const [newItem, setNewItem] = useState({
-    title: '',
-    description: '',
     string1: '', string2: '', string3: '',
     int1: '', int2: '', int3: '',
     bool1: false, bool2: false, bool3: false,
@@ -196,7 +194,6 @@ export default function InventoryDetailPage() {
   const addItemMutation = useMutation(addItemReq, {
     onSuccess: () => {
       setNewItem({
-        title: '', description: '',
         string1: '', string2: '', string3: '',
         int1: '', int2: '', int3: '',
         bool1: false, bool2: false, bool3: false,
@@ -633,7 +630,6 @@ export default function InventoryDetailPage() {
   const storageKey = `inv:${id}:visibleCols`;
   const defaultVisible = React.useMemo(() => {
     const base = {
-      title: true,
       customId: true,
       createdAt: true,
     };
@@ -656,13 +652,10 @@ export default function InventoryDetailPage() {
   const columns = React.useMemo(() => {
     const base = [
       {
-        key: 'title',
-        label: 'Title',
-        render: (it) => (
-          <Link to={`/items/${it.id}`} className="text-blue-600 hover:underline">{it.title || it.name || it.customId}</Link>
-        ),
+        key: 'customId',
+        label: 'ID',
+        render: (it) => it.customId || it.serial || it.id,
       },
-      { key: 'customId', label: 'ID', render: (it) => it.customId || it.serial || it.id },
       { key: 'createdAt', label: 'Created', render: (it) => (it.createdAt ? new Date(it.createdAt).toLocaleString() : '') },
     ];
 
@@ -705,6 +698,154 @@ export default function InventoryDetailPage() {
     return res.data?.secure_url || res.data?.url;
   };
 
+  // Add new state for editing
+  const [editingCell, setEditingCell] = useState({ rowId: null, field: null });
+  const [editValue, setEditValue] = useState('');
+
+  // Update item mutation
+  const updateItemMutation = useMutation(
+    async ({ itemId, field, value }) => {
+      const response = await axios.put(
+        `/api/items/${itemId}`,
+        { [field]: value },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          withCredentials: true
+        }
+      );
+      return response.data;
+    },
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['inventory', id, 'items']);
+        setEditingCell({ rowId: null, field: null });
+      },
+      onError: (error) => {
+        console.error('Error updating item:', error);
+        setSubmitErr(error.response?.data?.message || 'Failed to update item');
+      }
+    }
+  );
+
+  const handleCellClick = (rowId, field, value) => {
+    if (editMode && selectedItem?.id === rowId) {
+      setEditingCell({ rowId, field });
+      setEditValue(value || '');
+    }
+  };
+
+  const handleCellBlur = (rowId, field) => {
+    if (editingCell.rowId && editingCell.field) {
+      updateItemMutation.mutate({
+        itemId: rowId,
+        field: field,
+        value: editValue
+      });
+    }
+  };
+
+  // Add edit mode state
+  const [editMode, setEditMode] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
+
+  const handleEditClick = () => {
+    if (selected.size === 1) {
+      const itemId = Array.from(selected)[0];
+      const item = items.find(i => i.id === itemId);
+      if (item) {
+        setSelectedItem(item);
+        setEditMode(true);
+        // Clear any previous editing state
+        setEditingCell({ rowId: null, field: null });
+        setEditValue('');
+      }
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditMode(false);
+    setSelectedItem(null);
+    setEditingCell({ rowId: null, field: null });
+    setEditValue('');
+  };
+
+  // Update the columns definition to make cells editable
+  const columnsWithEditing = React.useMemo(() => {
+    const base = [
+      {
+        key: 'customId',
+        label: 'ID',
+        render: (it) => it.customId || it.serial || it.id,
+      },
+      { key: 'createdAt', label: 'Created', render: (it) => (it.createdAt ? new Date(it.createdAt).toLocaleString() : '') },
+    ];
+
+    for (const f of fixedSlotDefs) {
+      base.push({
+        key: f.key,
+        label: f.label,
+        render: (it) => {
+          const v = it[f.key];
+          if (v == null || v === '') return '';
+          if (f.type === 'boolean') return v ? 'Yes' : 'No';
+          if (f.type === 'file' && typeof v === 'string') {
+            return (
+              <a href={v} target="_blank" rel="noreferrer" className="inline-block align-middle">
+                <img
+                  src={v}
+                  alt={f.label}
+                  className="w-10 h-10 object-cover rounded border border-gray-200"
+                  referrerPolicy="no-referrer"
+                />
+              </a>
+            );
+          }
+          if (editMode && selectedItem?.id === it.id && editingCell.rowId === it.id && editingCell.field === f.key) {
+            return (
+              <div className="relative">
+                <input
+                  type={f.type === 'number' ? 'number' : 'text'}
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onBlur={() => handleCellBlur(it.id, f.key)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleCellBlur(it.id, f.key);
+                    } else if (e.key === 'Escape') {
+                      handleCancelEdit();
+                    }
+                  }}
+                  autoFocus
+                  disabled={updateItemMutation.isLoading}
+                  className="w-full px-2 py-1 border border-blue-300 rounded pr-7"
+                />
+                {updateItemMutation.isLoading && (
+                  <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                  </div>
+                )}
+              </div>
+            );
+          }
+          return (
+            <div 
+              onClick={() => handleCellClick(it.id, f.key, v)}
+              className={`px-2 py-1 ${editMode && selectedItem?.id === it.id ? 'bg-blue-50' : ''}`}
+            >
+              {String(v)}
+            </div>
+          );
+        },
+      });
+    }
+    return base;
+  }, [fixedSlotDefs, editingCell, editValue, editMode, selectedItem]);
+
+  const shownColumnsWithEditing = columnsWithEditing.filter((c) => visibleCols[c.key] !== false);
+
   // Safe place for loading/error checks (after all hooks)
   if (isLoading) {
     return (
@@ -723,7 +864,7 @@ export default function InventoryDetailPage() {
         <div className="mt-4">
           <Link to="/inventories" className="text-blue-600 hover:underline">Back to list</Link>
         </div>
-      </div>
+    </div>
     );
   }
   // (moved above) Selection handlers and deleteMutation
@@ -731,8 +872,11 @@ export default function InventoryDetailPage() {
   const openFirstSelected = (mode) => {
     const first = Array.from(selected)[0];
     if (!first) return;
-    if (mode === 'view') navigate(`/items/${first}`);
-    else if (mode === 'edit') navigate(`/items/${first}?edit=1`);
+    if (mode === 'view') {
+      navigate(`/items/${first}`);
+    } else if (mode === 'edit') {
+      navigate(`/items/${first}/edit`);
+    }
   };
 
   // Delete modals
@@ -913,13 +1057,27 @@ export default function InventoryDetailPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => openFirstSelected('edit')}
-                        disabled={selected.size === 0}
-                        className="p-2 rounded-md bg-blue-600 text-white disabled:opacity-50"
-                        title="Edit selected"
-                        aria-label="Edit selected"
+                        onClick={handleEditClick}
+                        disabled={selected.size !== 1 || updateItemMutation.isLoading}
+                        className="p-2 rounded-md bg-blue-600 text-white disabled:opacity-50 flex items-center gap-1 min-w-[32px] justify-center"
+                        title={updateItemMutation.isLoading ? 'Saving...' : 'Edit selected'}
+                        aria-label={updateItemMutation.isLoading ? 'Saving...' : 'Edit selected'}
                       >
-                        <Pencil className="w-4 h-4" />
+                        {updateItemMutation.isLoading ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        ) : (
+                          <Pencil className="w-4 h-4" />
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCancelEdit}
+                        disabled={!editMode}
+                        className="p-2 rounded-md bg-gray-500 text-white disabled:opacity-50"
+                        title="Cancel edit"
+                        aria-label="Cancel edit"
+                      >
+                        <X className="w-4 h-4" />
                       </button>
                       <button
                         type="button"
@@ -948,7 +1106,7 @@ export default function InventoryDetailPage() {
                               aria-label="Select all"
                             />
                           </th>
-                          {shownColumns.map((c) => (
+                          {shownColumnsWithEditing.map((c) => (
                             <th key={c.key} className="px-3 py-2 text-left">{c.label}</th>
                           ))}
                         </tr>
@@ -965,7 +1123,7 @@ export default function InventoryDetailPage() {
                                 aria-label="Select row"
                               />
                             </td>
-                            {shownColumns.map((c) => (
+                            {shownColumnsWithEditing.map((c) => (
                               <td key={c.key} className="px-3 py-2">
                                 {c.render(it)}
                               </td>
@@ -993,77 +1151,75 @@ export default function InventoryDetailPage() {
                         className="w-7 h-7 rounded-full object-cover border border-gray-200"
                       />
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 text-gray-600">
-                          <span className="font-medium text-gray-900">{(() => {
-                            const a = c.author || {};
-                            const fn = a.firstName || '';
-                            const ln = a.lastName || '';
-                            const full = fn && ln ? `${fn} ${ln}` : (fn || a.username || 'User');
-                            return full;
-                          })()}</span>
-                          <span className="text-xs">{c.createdAt ? new Date(c.createdAt).toLocaleString() : ''}</span>
-                          {((c.author?.id === currentUserId) || !!(typeof isAdmin !== 'undefined' && isAdmin)) && (
-                            <span className="ml-auto inline-flex items-center gap-1.5">
-                              {editingId === c.id ? (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() => { const val = editText.trim(); if (!val) return; updateCommentMutation.mutate({ id: c.id, content: val }); }}
-                                    disabled={updateCommentMutation.isLoading}
-                                    className="p-1.5 rounded bg-blue-600 text-white disabled:opacity-50"
-                                    title={updateCommentMutation.isLoading ? 'Saving...' : 'Save'}
-                                    aria-label="Save comment"
-                                  >
-                                    <Check size={14} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => { setEditingId(null); setEditText(''); }}
-                                    className="p-1.5 rounded border border-gray-300"
-                                    title="Cancel"
-                                    aria-label="Cancel edit"
-                                  >
-                                    <X size={14} />
-                                  </button>
-                                </>
-                              ) : (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() => { setEditingId(c.id); setEditText(c.content || ''); }}
-                                    className="p-1.5 rounded border border-gray-300"
-                                    title="Edit"
-                                    aria-label="Edit comment"
-                                  >
-                                    <Pencil size={14} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => { setPendingCommentId(c.id); setShowDeleteCommentModal(true); }}
-                                    disabled={deleteCommentMutation.isLoading}
-                                    className="p-1.5 rounded border border-red-300 text-red-700 disabled:opacity-50"
-                                    title={deleteCommentMutation.isLoading ? 'Deleting...' : 'Delete'}
-                                    aria-label="Delete comment"
-                                  >
-                                    <Trash size={14} />
-                                  </button>
-                                </>
-                              )}
-                            </span>
-                          )}
-                        </div>
-                        {editingId === c.id ? (
-                          <textarea
-                            rows={2}
-                            value={editText}
-                            onChange={(e) => setEditText(e.target.value)}
-                            className="mt-1 w-full rounded-md border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          />
-                        ) : (
-                          <div className="text-gray-900">{c.content || ''}</div>
+                        <div className="text-sm text-gray-900">{(() => {
+                          const a = c.author || {};
+                          const fn = a.firstName || '';
+                          const ln = a.lastName || '';
+                          const full = fn && ln ? `${fn} ${ln}` : (fn || a.username || 'User');
+                          return full;
+                        })()}</div>
+                        <div className="text-xs text-gray-600">{c.createdAt ? new Date(c.createdAt).toLocaleString() : ''}</div>
+                        {((c.author?.id === currentUserId) || !!(typeof isAdmin !== 'undefined' && isAdmin)) && (
+                          <span className="ml-auto inline-flex items-center gap-1.5">
+                            {editingId === c.id ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => { const val = editText.trim(); if (!val) return; updateCommentMutation.mutate({ id: c.id, content: val }); }}
+                                  disabled={updateCommentMutation.isLoading}
+                                  className="p-1.5 rounded bg-blue-600 text-white disabled:opacity-50"
+                                  title={updateCommentMutation.isLoading ? 'Saving...' : 'Save'}
+                                  aria-label="Save comment"
+                                >
+                                  <Check size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { setEditingId(null); setEditText(''); }}
+                                  className="p-1.5 rounded border border-gray-300"
+                                  title="Cancel"
+                                  aria-label="Cancel edit"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => { setEditingId(c.id); setEditText(c.content || ''); }}
+                                  className="p-1.5 rounded border border-gray-300"
+                                  title="Edit"
+                                  aria-label="Edit comment"
+                                >
+                                  <Pencil size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { setPendingCommentId(c.id); setShowDeleteCommentModal(true); }}
+                                  disabled={deleteCommentMutation.isLoading}
+                                  className="p-1.5 rounded border border-red-300 text-red-700 disabled:opacity-50"
+                                  title={deleteCommentMutation.isLoading ? 'Deleting...' : 'Delete'}
+                                  aria-label="Delete comment"
+                                >
+                                  <Trash size={14} />
+                                </button>
+                              </>
+                            )}
+                          </span>
                         )}
                       </div>
                     </div>
+                    {editingId === c.id ? (
+                      <textarea
+                        rows={2}
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value)}
+                        className="mt-1 w-full rounded-md border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    ) : (
+                      <div className="text-gray-900">{c.content || ''}</div>
+                    )}
                   </div>
                 ))}
                 {(chatData || []).length === 0 && (
@@ -1556,8 +1712,8 @@ export default function InventoryDetailPage() {
                 type="button"
                 className="px-4 py-2 rounded-md bg-blue-600 text-white"
                 onClick={() => {
-                  const headers = shownColumns.map((c)=>c.label);
-                  const rows = items.map((it)=> shownColumns.map((c)=> {
+                  const headers = shownColumnsWithEditing.map((c)=>c.label);
+                  const rows = items.map((it)=> shownColumnsWithEditing.map((c)=> {
                     const v = typeof c.render === 'function' ? (it[c.key] ?? '') : it[c.key];
                     return String(v ?? '').replaceAll('"','\"');
                   }));
@@ -1577,22 +1733,8 @@ export default function InventoryDetailPage() {
           <div className="mt-6 border-t border-gray-200 pt-4">
             <h3 className="text-lg font-medium text-gray-900 mb-2">Add Item</h3>
             {submitErr && <p className="mb-2 text-red-600">{submitErr}</p>}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <input
-                placeholder="Title"
-                value={newItem.title}
-                onChange={(e) => setNewItem((x) => ({ ...x, title: e.target.value }))}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-              <input
-                placeholder="Description (optional)"
-                value={newItem.description}
-                onChange={(e) => setNewItem((x) => ({ ...x, description: e.target.value }))}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
             {fixedSlotDefs.length > 0 && (
-              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {fixedSlotDefs.map((f) => {
                   const val = newItem[f.key] ?? '';
                   const setVal = (v) => setNewItem((x) => ({ ...x, [f.key]: v }));
@@ -1679,9 +1821,9 @@ export default function InventoryDetailPage() {
             )}
             <button
               type="button"
-              disabled={!newItem.title || addItemMutation.isLoading}
+              disabled={addItemMutation.isLoading}
               onClick={() => {
-                const payload = { title: newItem.title, description: newItem.description };
+                const payload = {};
                 for (const f of fixedSlotDefs) {
                   if (newItem[f.key] !== undefined) payload[f.key] = newItem[f.key];
                 }

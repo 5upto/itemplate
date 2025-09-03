@@ -191,6 +191,7 @@
       "copy": "Copy",
       "paste": "Paste",
       "cut": "Cut",
+      "notFound": "Not Found",
       "undo": "Undo",
       "redo": "Redo",
       "refresh": "Refresh",

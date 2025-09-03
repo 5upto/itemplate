@@ -55,8 +55,6 @@ export default function CreateItemPage() {
     return obj;
   }, [fieldDefs]);
 
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
   const [customFields, setCustomFields] = useState({});
   // Force-remount file inputs to clear selected filenames when removing
   const [fileKeys, setFileKeys] = useState({});
@@ -87,8 +85,6 @@ export default function CreateItemPage() {
     try {
       const res = await axios.post('/api/items', {
         inventoryId: inventory.id,
-        title: title?.trim() || undefined,
-        description: description?.trim() || undefined,
         customFields,
       });
       navigate(`/items/${res.data.id}`);
@@ -135,26 +131,6 @@ export default function CreateItemPage() {
             {t('item.noCustomFields')}
           </div>
         )}
-
-        {/* Basic fields */}
-        <div className="grid gap-2">
-          <label className="text-sm font-medium text-gray-700">{t('fields.title') || 'Title'}</label>
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-          />
-        </div>
-        <div className="grid gap-2">
-          <label className="text-sm font-medium text-gray-700">{t('fields.description') || 'Description (optional)'}</label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={3}
-            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
 
         {fields.map((f) => {
           const key = f.key || f.name || f.id;

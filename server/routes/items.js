@@ -299,12 +299,11 @@ router.post('/',
   checkWriteAccess,
   async (req, res) => {
     try {
-      const { inventoryId, customFields, title, description } = req.body;
+      const { inventoryId, customFields } = req.body;
       // Fixed-slot answers (optional)
       const { string1, string2, string3, int1, int2, int3, bool1, bool2, bool3 } = req.body;
       
       // Get current item count for sequence generation
-      
       const itemCount = await Item.count({ where: { inventoryId } });
       
       // Generate custom ID
@@ -322,8 +321,6 @@ router.post('/',
       const createData = {
         inventoryId,
         customId,
-        title: title || null,
-        description: description || null,
         createdBy: req.user.id
       };
       // If JSON customFields provided, map them to fixed slots using current inventory definition
