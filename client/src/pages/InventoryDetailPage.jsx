@@ -654,7 +654,15 @@ export default function InventoryDetailPage() {
       {
         key: 'customId',
         label: 'ID',
-        render: (it) => it.customId || it.serial || it.id,
+        render: (it) => (
+          <Link 
+            to={`/items/${it.id}`} 
+            className="text-blue-600 hover:underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {it.customId || it.serial || it.id}
+          </Link>
+        ),
       },
       { key: 'createdAt', label: 'Created', render: (it) => (it.createdAt ? new Date(it.createdAt).toLocaleString() : '') },
     ];
@@ -778,7 +786,15 @@ export default function InventoryDetailPage() {
       {
         key: 'customId',
         label: 'ID',
-        render: (it) => it.customId || it.serial || it.id,
+        render: (it) => (
+          <Link 
+            to={`/items/${it.id}`} 
+            className="text-blue-600 hover:underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {it.customId || it.serial || it.id}
+          </Link>
+        ),
       },
       { key: 'createdAt', label: 'Created', render: (it) => (it.createdAt ? new Date(it.createdAt).toLocaleString() : '') },
     ];
@@ -824,7 +840,7 @@ export default function InventoryDetailPage() {
                 />
                 {updateItemMutation.isLoading && (
                   <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                   </div>
                 )}
               </div>
